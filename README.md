@@ -2,6 +2,10 @@
 
 **gnuper** is an open source python package for the preprocessing of mobile phone metadata whilst keeping privacy in mind. It is being developed by the spin-off project [knuper](https://www.knuper.com) of the Freie Universität Berlin.
 
+## Prerequisites
+- Python3
+- Apache Spark
+
 ## Structural Overview
 ![Data Levels](/docs/Raw_Data_Levels.png)
 
