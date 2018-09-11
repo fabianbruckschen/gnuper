@@ -1,5 +1,4 @@
 bandicoot==0.5.3
-findspark==1.1.0
 glob2==0.5
 numpy==1.13.3
 numpydoc==0.7.0
