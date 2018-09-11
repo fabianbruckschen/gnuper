@@ -1,10 +1,10 @@
 
-import pandas as pd  # data mangling and transforming
 from multiprocessing import cpu_count  # enables multiprocessing
+import pandas as pd  # data mangling and transforming
 
 
 class Attributes:
-    """Attributes class for the preprocessing process."""
+    """Attributes class for the gnuper preprocessing."""
 
     def __init__(self,
                  mp_flag=None, bc_flag=None, no_info=None, clean_up=None,
@@ -25,6 +25,20 @@ class Attributes:
                  max_weekly_interactions=1000,  # adjust
                  sparkmaster='local'
                  ):
+        """
+        Extract raw locations of cells and antennas while getting rid of
+        potential duplicates.
+
+        Inputs
+        ------
+        table_name : name of the table the query is supposed to run on,
+                     defaulting to '%(table_name)s', i.e. no substitution
+
+        Output
+        ------
+        GPS information of availables cells and antennas.
+        """
+
         # flags
         self.mp_flag = mp_flag  # multiprocessing
         self.bc_flag = bc_flag  # bandicoot execution
@@ -65,7 +79,7 @@ class Attributes:
 class MockupAttributes:
     """Attributes class for creating mock up data."""
 
-    def __init__(self, output_path='../test_data/', n_cells=1000,
+    def __init__(self, output_path='../sample_data/', n_antennas=1000,
                  n_cells_p_antenna=3, n_users=100000, n_avg_daily_events=25,
                  cell_cname='CELL_ID', antenna_cname='SITE_ID',
                  long_cname='X', lat_cname='Y',
@@ -79,17 +93,72 @@ class MockupAttributes:
                  tac_cname='TAC_CODE',
                  duration_cname='CALL_DURATION',
                  long_range=[28, 38], lat_range=[11, 16],
-                 call_unit='s', max_call_duration=7000,
+                 max_call_duration=7000,
                  date_window=['2018-01-01', '2018-12-31'],
                  date_format=None,
                  loc_file_name='MS_LOCATION.csv',
                  raw_header=True, location_header=True):
+        """
+        Holds several attributes for creating synthetic CDRs according to one's
+        wishes.
 
+        Inputs
+        ------
+
+        General:
+        --
+        output_path : Folder in which the output files should be stored.
+        max_call_duration : The maximum duration for a call
+            (irrespective of the unit, e.g. seconds or minutes).
+        date_format : The format in which the timestamp of an event should be
+            saved.
+        loc_file_name : File name of the locations file.
+        raw_header : Flag for daily files, if the header is saved.
+        location_header : Flag for location file, if the header is saved.
+        long_range : Array which holds the minimum and maximum longitude
+            coordinate for the antenna area.
+        lat_range : Array which holds the minimum and maximum latitude
+            coordinate for the antenna area.
+
+        Size:
+        --
+        n_antennas : Number of different antennas.
+        n_cells_p_antenna : Number of cells per antenna.
+        n_users= : Number of users.
+        n_avg_daily_events : Number of average daily events (calls & sms)
+            per user.
+        date_window : Array which holds begin and end date of the CDR span.
+
+        Locations CSV:
+        --
+        cell_cname : Column name of the cell id.
+        antenna_cname : Column name of the antenna id.
+        long_cname : Column name of the longitude coordinate.
+        lat_cname : Column name of the latitude coordinate.
+
+        CDR CSV:
+        --
+        type_cname : Column name of the flag that defines the direction of an
+            event.
+        msisdn_cname : Column name of the user's MSISDN.
+        date_cname : Column name of the date column.
+        service_cname : Column name of the flag that defines the type of event.
+        location_cname : Column name of the cell id.
+        partner_type_cname : Column name of the partner type (national or
+            international).
+        partner_cname : Column name of the partner id.
+        tac_cname : Column name of the tac code.
+        duration_cname : Column name of the duration field.
+
+        Output
+        ------
+        Class with all relevant information for creating Mockup data.
+        """
         # outputpath
         self.output_path = output_path
 
-        # number of generated cells
-        self.n_cells = n_cells
+        # number of generated antennas
+        self.n_antennas = n_antennas
         # number of cells per antenna
         self.n_cells_p_antenna = n_cells_p_antenna
         # number of desired user_ids
@@ -122,7 +191,6 @@ class MockupAttributes:
         self.lat_range = lat_range
 
         # call specific attributes
-        self.call_unit = call_unit  # one of m (minutes) or s (seconds)
         self.max_call_duration = max_call_duration  # maxi duration of a call
 
         # date timestamp specifics

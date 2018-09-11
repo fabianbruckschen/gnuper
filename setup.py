@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="gnuper",
-    version="0.0.1",
+    version="0.0.2",
     author="Fabian Bruckschen",
     author_email="fabian@knuper.com",
     description="Open Source Package for Mobile Phone Metadata Preprocessing",
