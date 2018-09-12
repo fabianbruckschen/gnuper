@@ -15,6 +15,7 @@ Structural Overview
 
 .. figure:: docs/Raw_Data_Levels.png
    :alt: Data Levels
+   :scale: 80 %
 
 - **Level 0**
 - **Level 1**

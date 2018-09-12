@@ -13,6 +13,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://gitlab.com/knuper/gnuper",
     packages=setuptools.find_packages(),
+    include_package_data=True,
     install_requires=[
           'bandicoot==0.5.3',
           'glob2==0.5',
