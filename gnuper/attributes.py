@@ -7,8 +7,8 @@ class Attributes:
     """Attributes class for the gnuper preprocessing."""
 
     def __init__(self,
-                 mp_flag=None, bc_flag=None, no_info=None, clean_up=None,
-                 cap_lat=None, cap_long=None,  # adjust
+                 mp_flag=None, bc_flag=None, verbose=None, clean_up=None,
+                 cap_coords=None,  # adjust
                  raw_data_path='../data/',  # adjust
                  chunking_path='../user_chunks/',
                  bandicoot_path='../user_bandicoot/',
@@ -20,32 +20,80 @@ class Attributes:
                  work_begin=9, work_end=17,  # adjust
                  ep_begin=3, ep_end=5, lp_begin=10, lp_end=12,  # adjust
                  weekend_days=[6, 7],  # adjust
-                 call_unit_multiplicator=1,  # multiplicator to get seconds
+                 call_unit='s',  # minutes or seconds
                  max_chunksize=50000,  # adjust
                  max_weekly_interactions=1000,  # adjust
                  sparkmaster='local'
                  ):
         """
-        Extract raw locations of cells and antennas while getting rid of
-        potential duplicates.
+        Holds all attributes necessary for creating features out of raw CDR
+        metadata. Values might need to be adjusted to conform with the given
+        structure of the data.
 
         Inputs
         ------
-        table_name : name of the table the query is supposed to run on,
-                     defaulting to '%(table_name)s', i.e. no substitution
+
+        Flags:
+        --
+        mp_flag : Use multiprocessing ressources to increase speed.
+        bc_flag : Create averages of bandicoot features as well. Setting this
+            flag will increase run time exponentially.
+        verbose : If set, additional information about data structure and
+            intermediate statuses will be printed.
+        clean_up : Temporary files will be deleted after use.
+
+        Paths & Files:
+        --
+        raw_data_path : Location of the raw data folder.
+        chunking_path : Temporary folder name which will hold user-chunked
+            preprocessed files.
+        bandicoot_path : Location where temporary bandicoot features on user
+            level will be stored.
+        antenna_features_path : Location of antenna features by category.
+        raw_locations : Path to file which holds BTS and their GPS
+            locations.
+        antennas_file : Path to intermediate file which holds unique GPS
+            locations.
+        home_antennas_file : Path to intermediate file which holds the
+            predicted home antenna per user.
+
+        Country Specifics:
+        --
+        cap_coords : Array of latitude and longitude coordinates of a country's
+            capital.
+        noct_begin : Beginning of the nocturnal time period. Used for
+            predicting a user's home antenna.
+        noct_end : End of the nocturnal time period.
+        work_begin : Beginning of the typical working period.
+        work_end : End of the typical working period.
+        ep_begin : Beginning of the early peak period (early risers).
+        ep_end : End of the early peak period.
+        lp_begin : Beginning of the late peak period (late risers).
+        lp_end : End of the late peak period.
+        weekend_days : Array of a country's days which are defined as weekend
+            in number of day notation (Monday=1 and so on).
+
+        Data (Size) Specifics:
+        call_unit : Either 'm' for minutes or 's' for seconds.
+        max_chunksize : Maximum number of users per chunk.
+        max_weekly_interactions : Maximum number of weekly events (calls or
+            sms) which are accepted to consider user human and not machine.
+        sparkmaster : Spark specific options, depending on script running
+            locally or on a cluster.
+
 
         Output
         ------
-        GPS information of availables cells and antennas.
+        Class with all relevant information for creating Mockup data.
         """
 
         # flags
         self.mp_flag = mp_flag  # multiprocessing
         self.bc_flag = bc_flag  # bandicoot execution
-        self.no_info = no_info  # additional info printing
+        self.verbose = verbose  # additional info printing
         self.clean_up = clean_up  # clean up files
         # define coordinates of the capital
-        self.c_coord = {'latitude': cap_lat, 'longitude': cap_long}
+        self.c_coord = {'latitude': cap_coords[0], 'longitude': cap_coords[1]}
         # paths
         self.raw_data_path = raw_data_path  # insert path to raw data files
         self.chunking_path = chunking_path  # temporary folder for user chunks
@@ -68,7 +116,13 @@ class Attributes:
         self.weekend_days = weekend_days
         # multiplicator to get call units to the level of seconds
         # (e.g. for minutes = 60)
-        self.call_unit_multiplicator = call_unit_multiplicator
+        if call_unit == 's':
+            self.call_unit_multiplicator = 1
+        elif call_unit == 'm':
+            self.call_unit_multiplicator = 60
+        else:
+            raise ValueError("call_unit is neither 's' for seconds nor 'm' for\
+             minutes... Aborting")
         # maximum chunksize for users
         self.max_chunksize = max_chunksize
         self.max_weekly_interactions = max_weekly_interactions
