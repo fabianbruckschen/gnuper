@@ -1,11 +1,10 @@
 
-__all__ = ['attributes_classes', 'preprocessing_functions',
-           'preprocessing_script', 'queries']
+__all__ = ['attributes', 'sdf', 'bandicoot', 'queries']
 
-from .attributes_classes import Attributes, MockupAttributes
-from .preprocessing_functions import (read_as_sdf, read_alter_save, union_all,
-                                      sdf_from_folder, load_and_compute,
-                                      bc_batch, aggregate_chunks)
-from . import queries
+from .attributes import Attributes, MockupAttributes
+from .sdf import (read_as_sdf, read_alter_save, union_all,
+                  sdf_from_folder, aggregate_chunks)
+from .bandicoot import bc_batch
+import gnuper.queries as queries
 
-name = "gnuper"
+name = 'gnuper'
