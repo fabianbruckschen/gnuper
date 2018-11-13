@@ -7,7 +7,8 @@ class Attributes:
     """Attributes class for the gnuper preprocessing."""
 
     def __init__(self,
-                 mp_flag=None, bc_flag=None, verbose=None, clean_up=None,
+                 mp_flag=None, bc_flag=None, hdfs_flag=None,
+                 verbose=None, clean_up=None,
                  cap_coords=None,  # adjust
                  raw_data_path='../data/',  # adjust
                  chunking_path='../user_chunks/',
@@ -38,6 +39,7 @@ class Attributes:
         mp_flag : Use multiprocessing ressources to increase speed.
         bc_flag : Create averages of bandicoot features as well. Setting this
             flag will increase run time exponentially.
+        hdfs_flag : Set this flag, if data is stored in HDFS.
         verbose : If set, additional information about data structure and
             intermediate statuses will be printed.
         clean_up : Temporary files will be deleted after use.
@@ -90,6 +92,7 @@ class Attributes:
         # flags
         self.mp_flag = mp_flag  # multiprocessing
         self.bc_flag = bc_flag  # bandicoot execution
+        self.hdfs_flag = hdfs_flag  # data storage
         self.verbose = verbose  # additional info printing
         self.clean_up = clean_up  # clean up files
         # define coordinates of the capital
@@ -106,7 +109,7 @@ class Attributes:
         self.home_antennas_file = raw_data_path+home_antennas_file
         # multiprocessing
         if mp_flag:
-            self.n_processors = cpu_count() - 2  # leave 2 cpu unused
+            self.n_processors = cpu_count() - 1  # leave 1 cpu unused
         # define time windows in 24h format
         self.noct_time = {'begin': noct_begin, 'end': noct_end}  # nighttime
         self.work_day = {'begin': work_begin, 'end': work_end}  # working day
