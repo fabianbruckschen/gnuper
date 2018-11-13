@@ -199,7 +199,16 @@ def sdf_from_folder(folder, attributes, sparksession, file_pattern='*.csv',
     if action in ('union', 'both'):
         # read in files
         raw_df_list = []
-        if attributes.mp_flag:
+        if attributes.hdfs_flag or not attributes.mp_flag:
+            pbar = tqdm(total=len(file_names), desc='Read Files', leave=True)
+            for file in file_names:
+                raw_df_list.append(read_as_sdf(file, sparksession=sparksession,
+                                               header=header,
+                                               inferSchema=inferSchema,
+                                               colnames=colnames,
+                                               query=query))
+                pbar.update(1)
+        else:
             # assuming 2 threads per processor
             pool = ThreadPool(attributes.n_processors*2)
             for _ in tqdm(pool

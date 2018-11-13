@@ -1,8 +1,8 @@
 """
-preprocessing_script.py
+main.py
 
 This script serves as a one line execution via the command line for the whole
-process. Several options can be set when started:
+preprocessing process. Several options can be set when started:
 
 mp_flag : If set, several parts of the script try to spawn as many processes or
           threads as possible to speed up execution.
@@ -16,6 +16,7 @@ raw_data_path : Can be set to an alternate path (e.g. ../test_data/), default
                 is 'data' folder in the parent directory (../data/).
 """
 import os  # operating system functions like renaming files and directories
+import subprocess  # for python to interact with the HDFS
 import shutil  # recursive file and directory operations
 import glob  # pattern matching for paths
 import pandas as pd  # data mangling and transforming
@@ -23,31 +24,30 @@ import bandicoot as bc  # MIT toolkit for creating bandicoot indicators
 import argparse  # entering flags from the cmd line
 from pyspark.sql import SparkSession  # using spark context for big data files
 from pyspark.sql.functions import col  # needed for functions over each column
-from attributes_classes import Attributes  # module intern attributes
-from queries import Queries  # module intern queries
-from preprocessing_functions import (read_as_sdf, sdf_from_folder, union_all,
-                                     bc_batch, aggregate_chunks)  # functions
 
 # # Preparations
 if __name__ == "__main__":
     # command line options
     parser = argparse.ArgumentParser()
     parser.add_argument("--mp_flag", action='store_true',
-                        help="Should multiprocessing be enabled?",
+                        help="Enabling Multiprocessing where feasible",
                         default=False)
     parser.add_argument("--bc_flag", action='store_true',
-                        help="Should bandicoot indicators be calculated?",
+                        help="Bandicoot indicators will be calculated as well",
                         default=False)
-    parser.add_argument("--no_info", action='store_true',
-                        help="Should additional information be calculated?",
+    parser.add_argument("--hdfs_flag", action='store_true',
+                        help="Data is stored in an HDFS",
+                        default=False)
+    parser.add_argument("--verbose", action='store_true',
+                        help="Additional info is being printed",
                         default=False)
     parser.add_argument("--clean_up", action='store_true',
-                        help="Should intermediate folders and files be deleted\
-                        after successful run?",
+                        help="Intermediate folders and files will be deleted\
+                        after a successful run",
                         default=False)
     parser.add_argument("--raw_data_path", help="Location of raw data")
     parser.add_argument("--parts_to_run",
-                        help="if only parts of the script should be run")
+                        help="Define parts of the script which should be run")
     parsed_args = parser.parse_args()
 
     if parsed_args.raw_data_path is None:
@@ -67,16 +67,15 @@ Part 2: Looping over those chunks to create antenna features\n\
 Part 3: Uniting features from all sources to get 1 single output file')
 
 # define attributes for this session
-attributes = Attributes(mp_flag=parsed_args.mp_flag,
-                        bc_flag=parsed_args.bc_flag,
-                        no_info=parsed_args.no_info,
-                        clean_up=parsed_args.clean_up,
-                        raw_data_path=raw_data_path,
-                        cap_lat=15.500654, cap_long=32.559899,  # capital gps
-                        weekend_days=[5, 6], call_unit_multiplicator=60,
-                        sparkmaster='local[3]')
-# initiate queries class
-q = Queries()
+att = gn.Attributes(mp_flag=parsed_args.mp_flag,
+                    bc_flag=parsed_args.bc_flag,
+                    hdfs_flag=parse_args.hdfs_flag,
+                    verbose=parsed_args.no_info,
+                    clean_up=parsed_args.clean_up,
+                    raw_data_path=raw_data_path,
+                    cap_lat=15.500654, cap_long=32.559899,  # capital gps
+                    weekend_days=[5, 6],
+                    sparkmaster='local[3]')
 
 # # --- Part 1 --- (Preprocessing of raw files and saving by user)
 spark = SparkSession.builder.master(attributes.sparkmaster)\
@@ -85,11 +84,11 @@ print('Spark environment for Part 1 created!')
 
 # ## antennas datasets
 # read cell and antenna locations into a spark dataframe (sdf)
-raw_locations = read_as_sdf(file=attributes.raw_locations,
-                            sparksession=spark, header=False,
-                            colnames=['cell_id', 'antenna_id',
-                                      'longitude', 'latitude'],
-                            query=q.raw_locations_query())
+raw_locations = gn.read_as_sdf(file=att.raw_locations,
+                               sparksession=spark, header=False,
+                                colnames=['cell_id', 'antenna_id',
+                                          'longitude', 'latitude'],
+                                query=gn.queries.general.raw_locations_query())
 # create raw table to query and cache it as we will query it for every day
 raw_locations.createOrReplaceTempView('table_raw_locations')
 spark.catalog.cacheTable('table_raw_locations')
@@ -97,8 +96,8 @@ spark.catalog.cacheTable('table_raw_locations')
 # solely antenna locations as sdf (= ignore cell_id)
 # FILE: save as 1 csv next to the raw data as we will need it later on
 raw_locations.selectExpr('antenna_id', 'longitude', 'latitude')\
-    .dropDuplicates().toPandas()\
-    .to_csv(attributes.antennas_file, index=False)
+    .dropDuplicates().write.csv(att.antennas_file,
+                                mode='overwrite', header=True)
 print('Antenna SDF & table created!')
 
 # ## Preprocessing
@@ -107,12 +106,23 @@ print('Antenna SDF & table created!')
 print('Starting with Level 0: General preprocessing of raw CDRs.')
 
 # ### CDR datasets
-if not attributes.no_info:
+if att.verbose and hdfs_flag:
     # get all CDR filenames without the pre- and suffix
-    raw_file_names = sorted([os.path.basename(f).replace('.csv', '')
-                             for f in glob.glob(attributes.raw_data_path +
+    args = "hdfs dfs -stat '%n' "+raw_data_path+"/20*.csv"
+    p = subprocess.Popen(args,
+                         shell=True,
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.STDOUT)
+    s_output, s_err = p.communicate()
+    raw_file_names = s_output.split()
+    dates = sorted([f.decode('utf-8').replace('.csv', '')
+                    for f in raw_file_names])
+    print('Available CDR Dates: '+str(dates))  # doublechecking
+elif att.verbose:
+    dates = sorted([os.path.basename(f).replace('.csv', '')
+                    for f in glob.glob(att.raw_data_path +
                                                 '20*.csv')])
-    print('Available CDR Dates: '+str(raw_file_names))  # doublechecking
+    print('Available CDR Dates: '+str(dates))  # doublechecking
 
 # order of the raw columns
 raw_colnames = ['CALL_RECORD_TYPE', 'CALLER_MSISDN', 'CALL_DATE',
