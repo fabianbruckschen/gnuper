@@ -117,6 +117,34 @@ def union_all(df_list):
     else:
         return df_list[0]
 
+def files_in_folder(folder, file_pattern, hdfs_flag):
+    """
+    Function to list files in a folder locally or in HDFS.
+
+    Inputs
+    ------
+    folder : Path to where the files are stored.
+    file_pattern : Only list certain types which match the pattern,
+        e.g. 20*.csv
+    hdfs_flag : Boolean if the searched folder is in a HDFS.
+
+    Output
+    ------
+    List of filepaths at the given location.
+    """
+    if hdfs_flag:
+        args = "hdfs dfs -stat '%n' "+folder+file_pattern
+        p = subprocess.Popen(args,
+                             shell=True,
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.STDOUT)
+        s_output, s_err = p.communicate()
+        raw_file_names = s_output.split()
+        files = sorted([folder+f.decode('utf-8') for f in raw_file_names])
+    else:
+        files = sorted([folder+os.path.basename(f)
+                        for f in glob.glob(folder + file_pattern)])
+    return files
 
 def sdf_from_folder(folder, attributes, sparksession, file_pattern='*.csv',
                     recursive=False, header=True, inferSchema=True,
@@ -172,8 +200,9 @@ def sdf_from_folder(folder, attributes, sparksession, file_pattern='*.csv',
         Aborting")
 
     # get file names
-    file_names = glob.glob(folder+file_pattern)
-    if recursive:
+    # get file names
+    file_names = files_in_folder(folder, file_pattern, attributes.hdfs_flag)
+    if recursive and not attributes.hdfs_flag:
         subdirs = next(os.walk(folder))[1]
         for d in subdirs:
             file_names.append(glob.glob(folder+d+'/'+file_pattern)[0])
@@ -224,7 +253,7 @@ def sdf_from_folder(folder, attributes, sparksession, file_pattern='*.csv',
                 raw_df_list.append(_)
                 pass
             pool.close()
-        
+
         # unite them
         raw_df = union_all(raw_df_list)
         print('Files have been read and unioned!')

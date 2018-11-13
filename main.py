@@ -106,22 +106,10 @@ print('Antenna SDF & table created!')
 print('Starting with Level 0: General preprocessing of raw CDRs.')
 
 # ### CDR datasets
-if att.verbose and hdfs_flag:
-    # get all CDR filenames without the pre- and suffix
-    args = "hdfs dfs -stat '%n' "+raw_data_path+"/20*.csv"
-    p = subprocess.Popen(args,
-                         shell=True,
-                         stdout=subprocess.PIPE,
-                         stderr=subprocess.STDOUT)
-    s_output, s_err = p.communicate()
-    raw_file_names = s_output.split()
-    dates = sorted([f.decode('utf-8').replace('.csv', '')
-                    for f in raw_file_names])
-    print('Available CDR Dates: '+str(dates))  # doublechecking
-elif att.verbose:
-    dates = sorted([os.path.basename(f).replace('.csv', '')
-                    for f in glob.glob(att.raw_data_path +
-                                                '20*.csv')])
+if att.verbose:
+    dates = files_in_folder(att.raw_data_path, '20*.csv',
+                            att.hdfs_flag)
+    dates = [os.path.basename(d).replace('.csv', '') for d in dates]
     print('Available CDR Dates: '+str(dates))  # doublechecking
 
 # order of the raw columns
