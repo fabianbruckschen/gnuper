@@ -224,16 +224,7 @@ def sdf_from_folder(folder, attributes, sparksession, file_pattern='*.csv',
                 raw_df_list.append(_)
                 pass
             pool.close()
-        else:
-            pbar = tqdm(total=len(file_names), desc='Read Files', leave=True)
-            for file in file_names:
-                raw_df_list.append(read_as_sdf(file, sparksession=sparksession,
-                                               header=header,
-                                               inferSchema=inferSchema,
-                                               colnames=colnames,
-                                               query=query))
-                pbar.update(1)
-
+        
         # unite them
         raw_df = union_all(raw_df_list)
         print('Files have been read and unioned!')
