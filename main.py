@@ -70,15 +70,15 @@ Part 3: Uniting features from all sources to get 1 single output file')
 att = gn.Attributes(mp_flag=parsed_args.mp_flag,
                     bc_flag=parsed_args.bc_flag,
                     hdfs_flag=parse_args.hdfs_flag,
-                    verbose=parsed_args.no_info,
+                    verbose=parsed_args.verbose,
                     clean_up=parsed_args.clean_up,
                     raw_data_path=raw_data_path,
-                    cap_lat=15.500654, cap_long=32.559899,  # capital gps
+                    cap_coords=[15.500654, 32.559899],  # capital gps
                     weekend_days=[5, 6],
-                    sparkmaster='local[3]')
+                    sparkmaster='yarn')
 
 # # --- Part 1 --- (Preprocessing of raw files and saving by user)
-spark = SparkSession.builder.master(attributes.sparkmaster)\
+spark = SparkSession.builder.master(att.sparkmaster)\
     .appName('cdr_extraction_part1').getOrCreate()
 print('Spark environment for Part 1 created!')
 
