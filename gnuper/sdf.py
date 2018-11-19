@@ -1,7 +1,10 @@
 """Contains functions for processing files and (spark) data frames."""
 
 import os  # operating system functions like renaming files and directories
-import glob  # pattern matching for paths
+import subprocess  # for python to interact with the HDFS
+import re  # regular expressions
+import fnmatch  # filtering lists
+import glob  # pattern matching for local paths
 from tqdm import tqdm  # progress bar for large tasks
 from multiprocessing.pool import ThreadPool  # enables spark multithreading
 from functools import partial  # multiprocessing with several arguments
@@ -41,7 +44,8 @@ def read_as_sdf(file, sparksession, header=True, inferSchema=True,
                 sdf = sdf.toDF(*colnames)
 
         if query is not None:  # execute query if given
-            table_name = 'table_'+os.path.splitext(os.path.basename(file))[0]
+            table_name = 'table_'+re.sub('\W+','', 
+                                         os.path.splitext(os.path.basename(file))[0])
             sdf.createOrReplaceTempView(table_name)
             sdf = sparksession.sql(query % {'table_name': table_name})
 
@@ -113,11 +117,14 @@ def union_all(df_list):
     Single SDF which unioned all elements of the input list.
     """
     if len(df_list) > 1:
-        return df_list[0].union(union_all(df_list[1:]))
+        if len(df_list[0].head(1))==0: # if sdf is empty
+            return union_all(df_list[1:])
+        else:
+            return df_list[0].union(union_all(df_list[1:]))
     else:
         return df_list[0]
 
-def files_in_folder(folder, file_pattern, hdfs_flag):
+def files_in_folder(folder, file_type='csv', file_pattern=None, hdfs_flag=False, recursive=False):
     """
     Function to list files in a folder locally or in HDFS.
 
@@ -133,20 +140,35 @@ def files_in_folder(folder, file_pattern, hdfs_flag):
     List of filepaths at the given location.
     """
     if hdfs_flag:
-        args = "hdfs dfs -stat '%n' "+folder+file_pattern
+        # arguments for interacting with HDFS
+        args = 'hdfs dfs -ls '+folder+' | grep .'+file_type
+        if recursive: # recursive flag
+            args = args.replace(' -ls ', ' -ls -R ', 1)
         p = subprocess.Popen(args,
                              shell=True,
                              stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT)
-        s_output, s_err = p.communicate()
-        raw_file_names = s_output.split()
-        files = sorted([folder+f.decode('utf-8') for f in raw_file_names])
+        s_output, s_err = p.communicate() # save output
+        # decode from bytes to string and split by file
+        raw_file_info = s_output.decode('utf-8').split('\n')
+        # remove last string if cmd ended with a linebreak (most likely)
+        if raw_file_info[-1] == '':
+            del(raw_file_info[-1])
+        # only keep file_names and remove other info
+        files = sorted([f.split()[-1] for f in raw_file_info])
+        # filter results list for specific files
+        if file_pattern is not None:
+            files = fnmatch.filter(files, folder+file_pattern)
     else:
         files = sorted([folder+os.path.basename(f)
                         for f in glob.glob(folder + file_pattern)])
+        if recursive:
+            subdirs = next(os.walk(folder))[1]
+            for d in subdirs:
+                files.append(glob.glob(folder+d+'/'+file_pattern)[0])
     return files
 
-def sdf_from_folder(folder, attributes, sparksession, file_pattern='*.csv',
+def sdf_from_folder(folder, attributes, sparksession, file_type='csv', file_pattern=None,
                     recursive=False, header=True, inferSchema=True,
                     colnames=None, query=None,
                     save_path=None, save_format='csv', save_header=True,
@@ -201,11 +223,10 @@ def sdf_from_folder(folder, attributes, sparksession, file_pattern='*.csv',
 
     # get file names
     # get file names
-    file_names = files_in_folder(folder, file_pattern, attributes.hdfs_flag)
-    if recursive and not attributes.hdfs_flag:
-        subdirs = next(os.walk(folder))[1]
-        for d in subdirs:
-            file_names.append(glob.glob(folder+d+'/'+file_pattern)[0])
+    file_names = files_in_folder(folder=folder, file_type=file_type, 
+                                 file_pattern=file_pattern, 
+                                 hdfs_flag=attributes.hdfs_flag,
+                                 recursive=recursive)        
 
     # if files should be read, altered and saved
     if action in ('save', 'both'):
@@ -213,7 +234,7 @@ def sdf_from_folder(folder, attributes, sparksession, file_pattern='*.csv',
                     leave=True)
         for file in file_names:
             read_alter_save(file, sparksession=sparksession,
-                            read_header=header,
+                            header=header,
                             inferSchema=inferSchema,
                             colnames=colnames,
                             query=query, save_path=save_path,

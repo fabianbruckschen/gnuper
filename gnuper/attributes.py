@@ -10,13 +10,13 @@ class Attributes:
                  mp_flag=None, bc_flag=None, hdfs_flag=None,
                  verbose=None, clean_up=None,
                  cap_coords=None,  # adjust
-                 raw_data_path='../data/',  # adjust
-                 chunking_path='../user_chunks/',
-                 bandicoot_path='../user_bandicoot/',
-                 antenna_features_path='../antenna_features/',
+                 raw_data_path='data/',  # adjust
+                 chunking_path='user_chunks/',
+                 bandicoot_path='user_bandicoot/',
+                 antenna_features_path='antenna_features/',
                  raw_locations='MS_LOCATION.csv',  # adjust
                  antennas_file='antennas.csv',
-                 home_antennas_file='home_antennas.csv',
+                 home_antennas_path='home_antennas/',
                  noct_begin=19, noct_end=7,  # adjust
                  work_begin=9, work_end=17,  # adjust
                  ep_begin=3, ep_end=5, lp_begin=10, lp_end=12,  # adjust
@@ -101,12 +101,13 @@ class Attributes:
         self.raw_data_path = raw_data_path  # insert path to raw data files
         self.chunking_path = chunking_path  # temporary folder for user chunks
         self.antenna_features_path = antenna_features_path  # feature collect
+        self.home_antennas_path = home_antennas_path  # estimated home_antennas 
         if bc_flag:
             self.bandicoot_path = bandicoot_path  # folder for bc files
         # file names
         self.raw_locations = raw_data_path+raw_locations
         self.antennas_file = raw_data_path+antennas_file
-        self.home_antennas_file = raw_data_path+home_antennas_file
+        
         # multiprocessing
         if mp_flag:
             self.n_processors = cpu_count() - 1  # leave 1 cpu unused
