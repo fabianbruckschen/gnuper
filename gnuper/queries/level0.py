@@ -2,7 +2,8 @@
 Level 0."""
 
 
-def raw_preprocessing_query(cump, table_name='%(table_name)s'):
+def raw_preprocessing_query(cump, timestamp_format='dd MMM yyyy HH:mm:ss',
+                            table_name='%(table_name)s'):
     """
     Preprocess initial raw data by making columns more readable and
     transform data into unified format (timestamp, seconds as duration,
@@ -17,6 +18,8 @@ def raw_preprocessing_query(cump, table_name='%(table_name)s'):
                  defaulting to '%(table_name)s', i.e. no substitution.
     cump : Stands for *C*all-*U*nit-*M*ulti*P*lier which is 60 if the input
            is minutes and 1 for seconds.
+    timestamp_format : Format of original date or timestamp, which is needed
+                        to interpret into right timestamp format.
 
     Output
     ------
@@ -32,7 +35,7 @@ def raw_preprocessing_query(cump, table_name='%(table_name)s'):
            as direction,
           CALL_PARTNER_IDENTITY_TYPE as national,
           CALL_PARTNER_IDENTITY as correspondent_id,
-          CAST(UNIX_TIMESTAMP(CALL_DATE, 'dd MMM yyyy HH:mm:ss')
+          CAST(UNIX_TIMESTAMP(CALL_DATE, '%(timestamp_format)s')
            AS TIMESTAMP) as datetime, -- transform to proper timestamp
           INT(ROUND(CALL_DURATION*%(cump)s))
            as call_duration, -- calculate duration in seconds
@@ -47,7 +50,8 @@ def raw_preprocessing_query(cump, table_name='%(table_name)s'):
           AND BASIC_SERVICE IN (1,2)
         """
     return query % {'table_name': table_name,
-                    'cump': cump}
+                    'cump': cump,
+                    'timestamp_format': timestamp_format}
 
 
 def filter_machines_query(max_weekly_interactions,
