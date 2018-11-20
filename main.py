@@ -8,7 +8,7 @@ mp_flag : If set, several parts of the script try to spawn as many processes or
           threads as possible to speed up execution.
 bc_flag : If set, the time intensive bandicoot indicators are being calculated
           as well.
-hdfs_flag : If set, the data is saved in an HDFS (Depending on location of raw 
+hdfs_flag : If set, the data is saved in an HDFS (Depending on location of raw
             CDRs).
 no_info : If set, no additional info about data structure or size are being
           printed in order to save time.
@@ -16,7 +16,7 @@ clean_up : If set, intermediate directories and files are being deleted after
            they have been used.
 raw_data_path : Can be set to an alternate path (e.g. ../test_data/), default
                 is 'data' folder in the parent directory (../data/).
-parts_to_run : Process is split into three parts which can be executed 
+parts_to_run : Process is split into three parts which can be executed
                separately.
 """
 
@@ -103,7 +103,7 @@ if parts_to_run in ('all', '1'):
     # solely antenna locations as sdf (= ignore cell_id)
     # FILE: save as 1 csv next to the raw data as we will need it later on
     raw_locations.selectExpr('antenna_id', 'longitude', 'latitude')\
-        .dropDuplicates().write.csv(att.antennas_file,
+        .dropDuplicates().write.csv(att.antennas_path,
                                     mode='overwrite', header=True)
     print('Antenna SDF & table created!')
 
@@ -114,7 +114,7 @@ if parts_to_run in ('all', '1'):
 
     # ### CDR datasets
     if att.verbose:
-        dates = gn.files_in_folder(folder=att.raw_data_path, 
+        dates = gn.files_in_folder(folder=att.raw_data_path,
                                    file_pattern='20*.csv',
                                    hdfs_flag=att.hdfs_flag)
         dates = [os.path.basename(d).replace('.csv', '') for d in dates]
@@ -153,23 +153,6 @@ if parts_to_run in ('all', '1'):
                        save_partition='chunk_id', action='save')
     print('CSV files created for user chunks.')
 
-    # clear cached tables immediately
-    spark.catalog.clearCache()
-
-    if not att.hdfs_flag:
-        # proper file naming and directory structure
-        # get all subdirectories in the chunking folder
-        subdirs = next(os.walk(att.chunking_path))[1]
-
-        for d in subdirs:
-            c = d.replace('chunk_id=', '')  # extract chunk id
-            filenames = glob.glob(att.chunking_path+d+'/*.csv')  # get all files
-            combined_csv = pd.concat([pd.read_csv(f) for f in filenames])  # unite them
-            # save as new file with chunk id
-            combined_csv.to_csv(att.chunking_path+c+'.csv', index=False)
-            shutil.rmtree(att.chunking_path+d)  # delete obsolete dir
-        print('CSV files united and renamed for user chunks.')
-
     spark.stop()
     print('DONE with Part 1! User chunks saved to chunking folder.')
 
@@ -181,7 +164,7 @@ if parts_to_run in ('all', '2'):
 
     # ## antenna locations
     # read in table which was created in part 1
-    antennas_locations = spark.read.csv(att.antennas_file,
+    antennas_locations = spark.read.csv(att.antennas_path,
                                         header=True,
                                         inferSchema=True)
 
@@ -199,10 +182,10 @@ if parts_to_run in ('all', '2'):
         s_output, s_err = p.communicate()
         chunks = s_output.decode('utf-8').split()
     else:
-        chunks = sorted(glob.glob(attributes.chunking_path))
+        chunks = sorted(glob.glob(att.chunking_path))
     # save length for loop
     n = len(chunks)
-    print('Available user chunks: '+str(n))
+    print('Number of available user chunks: '+str(n))
 
     # collect home antennas per chunk
     home_antennas_list = []
@@ -214,8 +197,9 @@ if parts_to_run in ('all', '2'):
         print('Starting with '+chunk+', iteration '+str(i)+' out of '+str(n))
 
         # read in chunk and filter out machines and multi-users
-        raw_df = gn.sdf_from_folder(att.chunking_path+chunk+'/', att, spark, 
+        raw_df = gn.sdf_from_folder(att.chunking_path+chunk+'/', att, spark,
                                     header=True, inferSchema=False,
+                                    file_pattern='*.csv',
                                     query=gn.queries.level0.filter_machines_query(
                                     max_weekly_interactions=att.
                                     max_weekly_interactions))
@@ -243,9 +227,6 @@ if parts_to_run in ('all', '2'):
         n_users_w_ha = user_home_antenna_df.select('user_id').distinct().count()
         print('Ratio of users in this chunk with home antenna: '+str(n_users_w_ha/n_users))
 
-        # repartitioning by user
-        raw_df = raw_df.repartition(n_users, 'caller_id')
-
         # **Level 1**: Intermediate tables on user level (user_id still visible)
 
         # Datasets created in first iteration with columns in brackets:
@@ -268,8 +249,8 @@ if parts_to_run in ('all', '2'):
         # #### bandicoot_metrics
         if att.bc_flag and not att.hdfs_flag:
             # remove files from potential previous run
-            if os.path.exists(attributes.bandicoot_path):
-                shutil.rmtree(attributes.bandicoot_path)
+            if os.path.exists(att.bandicoot_path):
+                shutil.rmtree(att.bandicoot_path)
 
             bc_metrics_df = spark.sql(gn.queries.level1.bc_metrics_query(
                                       table_name='table_raw_df'))
@@ -278,7 +259,7 @@ if parts_to_run in ('all', '2'):
             users = [str(u.caller_id) for u in bc_metrics_df.select('caller_id')
                      .dropDuplicates().collect()]
 
-            # save single user files
+            # save into single user folders
             bc_metrics_df.coalesce(1).write.save(
                         path=att.bandicoot_path,
                         format='csv',
@@ -288,25 +269,29 @@ if parts_to_run in ('all', '2'):
 
             # proper file naming and directory structure
             # get all subdirectories in bandicoot folder
-            subdirs = next(os.walk(attributes.bandicoot_path))[1]
+            subdirs = next(os.walk(att.bandicoot_path))[1]
 
             for d in subdirs:
                 u = d.replace('caller_id=', '')  # extract user id
                 # rename csv to user id and move up
-                os.rename(glob.glob(attributes.bandicoot_path+d+'/*.csv')[0],
-                          attributes.bandicoot_path+u+'.csv')
-                shutil.rmtree(attributes.bandicoot_path+d)  # delete obsolete dir
+                os.rename(glob.glob(att.bandicoot_path+d+'/*.csv')[0],
+                          att.bandicoot_path+u+'.csv')
+                shutil.rmtree(att.bandicoot_path+d)  # delete obsolete dir
             print('Single User Files for bandicoot created for chunk '+str(i))
 
+            # save antenna file in the same directory
+            antennas_locations.toPandas().to_csv(att.bandicoot_path+'antennas.csv',
+                                                 index=False)
+
             # execute bandicoot calculation as batch
-            indicators = gn.bc_batch(users, attributes)
+            indicators = gn.bc_batch(users, att)
 
             # save as csv
-            bc.io.to_csv(indicators, '../bandicoot_indicators_'+str(i)+'.csv')
+            bc.io.to_csv(indicators, 'bandicoot_indicators_'+str(i)+'.csv')
             print('Bandicoot files csvs created for chunk '+str(i))
 
             # re-read as single sdf
-            bc_metrics_df = spark.read.csv('../bandicoot_indicators_' + str(i) +
+            bc_metrics_df = spark.read.csv('bandicoot_indicators_' + str(i) +
                                            '.csv', header=True, inferSchema=True)
 
             # cleaning
@@ -350,8 +335,8 @@ if parts_to_run in ('all', '2'):
                       'reporting__ignored_records__location')
 
             # clean up to save space
-            if attributes.clean_up:
-                shutil.rmtree(attributes.bandicoot_path)
+            if att.clean_up:
+                shutil.rmtree(att.bandicoot_path)
 
         # **Level 2**: Intermediate tables on antenna level
         # (user_id NOT visible anymore)
@@ -422,24 +407,27 @@ if parts_to_run in ('all', '2'):
                 .join(antenna_weight, 'antenna_id', 'inner')
 
         # #### save final outputs
-        antenna_metrics_week_df.coalesce(1)\
+        antenna_metrics_week_df\
             .write.csv(att.antenna_features_path+'week/'+str(i),
                        mode='overwrite', header=True)
 
-        antenna_metrics_hourly_df.coalesce(1)\
+        antenna_metrics_hourly_df\
             .write.csv(att.antenna_features_path+'hourly/'+str(i),
                        mode='overwrite', header=True)
 
-        antenna_interactions_df.coalesce(1)\
+        antenna_interactions_df\
             .write.csv(att.antenna_features_path+'interactions/'+str(i),
                        mode='overwrite', header=True)
 
         if att.bc_flag:
-            antenna_bandicoot_features_df.coalesce(1)\
+            antenna_bandicoot_features_df\
                 .write.csv(att.antenna_features_path+'bc/'+str(i),
                            mode='overwrite', header=True)
             # remove temporary bandicoot file on user level
-            os.remove('../bandicoot_indicators_'+str(i)+'.csv')
+            os.remove('bandicoot_indicators_'+str(i)+'.csv')
+
+        if i==n:
+            print('Done with all user chunks!')
 
     # ### --- LOOP END ---
 
@@ -447,13 +435,13 @@ if parts_to_run in ('all', '2'):
     home_antennas = gn.union_all(home_antennas_list)
 
     # save home antennas for later
-    home_antennas.coalesce(1).\
+    home_antennas.\
         write.csv(att.home_antennas_path, header=True, mode='overwrite')
 
     spark.stop()
     # delete chunking files if clean up flag is set
     if att.clean_up and not att.hdfs_flag:
-        shutil.rmtree(attributes.chunking_path)
+        shutil.rmtree(att.chunking_path)
     print('DONE! Antenna features files saved to antenna_features folder.')
 
 if parts_to_run in ('all', '3'):
@@ -465,7 +453,7 @@ if parts_to_run in ('all', '3'):
 
     # ## antenna locations
     # read in table
-    antennas_locations = spark.read.csv(att.antennas_file,
+    antennas_locations = spark.read.csv(att.antennas_path,
                                         header=True,
                                         inferSchema=True)
 
@@ -475,6 +463,7 @@ if parts_to_run in ('all', '3'):
 
     # ## home antennas
     home_antennas = gn.sdf_from_folder(att.home_antennas_path, att, spark,
+                                       file_pattern='*.csv',
                                        header=True,
                                        inferSchema=True)
     # keep number of antennas
@@ -526,11 +515,10 @@ if parts_to_run in ('all', '3'):
     # ### bandicoot_features
     if att.bc_flag and not att.hdfs_flag:
         # load in all items
-        antenna_bandicoot_df = sdf_from_folder(att.
-                                               antenna_features_path+'bc/',
-                                               attributes=att,
-                                               sparksession=spark,
-                                               recursive=True)
+        antenna_bandicoot_df = gn.sdf_from_folder(att.antenna_features_path+'bc/',
+                                                  attributes=att,
+                                                  sparksession=spark,
+                                                  recursive=True)
 
         # get total sum of weights (should be equal to total number of users!)
         sum_weights = antenna_bandicoot_df.select('count').groupBy().sum()\
@@ -625,14 +613,13 @@ if parts_to_run in ('all', '3'):
     # ## save final output
     final_features_df.coalesce(1).write.csv('final_features', mode='overwrite',
                                             header=True)
+    # rename final file if local
     if not att.hdfs_flag:
-        os.rename(glob.glob('../final_features/*.csv')[0], '../final_features.csv')
-        shutil.rmtree('../final_features')
-        
-    print('DONE! Features file saved to final_features/.')
+        os.rename(glob.glob('final_features/*.csv')[0], 'final_features.csv')
+        shutil.rmtree('final_features')
 
     spark.stop()
-if att.clean_up and not att.hdfs_flag:
-    shutil.rmtree(attributes.antenna_features_path)
+    if att.clean_up and not att.hdfs_flag:
+        shutil.rmtree(att.antenna_features_path)
 
-
+    print('DONE! Features file saved to final_features/.')
