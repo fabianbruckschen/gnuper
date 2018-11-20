@@ -15,7 +15,7 @@ class Attributes:
                  bandicoot_path='user_bandicoot/',
                  antenna_features_path='antenna_features/',
                  raw_locations='MS_LOCATION.csv',  # adjust
-                 antennas_file='antennas.csv',
+                 antennas_path='antennas',
                  home_antennas_path='home_antennas/',
                  noct_begin=19, noct_end=7,  # adjust
                  work_begin=9, work_end=17,  # adjust
@@ -54,9 +54,9 @@ class Attributes:
         antenna_features_path : Location of antenna features by category.
         raw_locations : Path to file which holds BTS and their GPS
             locations.
-        antennas_file : Path to intermediate file which holds unique GPS
+        antennas_path : Path to intermediate files which hold unique GPS
             locations.
-        home_antennas_file : Path to intermediate file which holds the
+        home_antennas_path : Path to intermediate files which hold the
             predicted home antenna per user.
 
         Country Specifics:
@@ -101,13 +101,12 @@ class Attributes:
         self.raw_data_path = raw_data_path  # insert path to raw data files
         self.chunking_path = chunking_path  # temporary folder for user chunks
         self.antenna_features_path = antenna_features_path  # feature collect
-        self.home_antennas_path = home_antennas_path  # estimated home_antennas 
+        self.home_antennas_path = home_antennas_path  # estimated home_antennas
         if bc_flag:
             self.bandicoot_path = bandicoot_path  # folder for bc files
-        # file names
         self.raw_locations = raw_data_path+raw_locations
-        self.antennas_file = raw_data_path+antennas_file
-        
+        self.antennas_path = raw_data_path+antennas_path
+
         # multiprocessing
         if mp_flag:
             self.n_processors = cpu_count() - 1  # leave 1 cpu unused
