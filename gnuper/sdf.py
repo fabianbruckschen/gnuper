@@ -44,7 +44,7 @@ def read_as_sdf(file, sparksession, header=True, inferSchema=True,
                 sdf = sdf.toDF(*colnames)
 
         if query is not None:  # execute query if given
-            table_name = 'table_'+re.sub('\W+','', 
+            table_name = 'table_'+re.sub('\W+','',
                                          os.path.splitext(os.path.basename(file))[0])
             sdf.createOrReplaceTempView(table_name)
             sdf = sparksession.sql(query % {'table_name': table_name})
@@ -185,8 +185,9 @@ def sdf_from_folder(folder, attributes, sparksession, file_type='csv', file_patt
     --
     attributes : Attributes class with specific options for current run.
     sparksession : Sparksession object defined by pyspark.
+    file_type : Type of files which need to be read.
     file_pattern :String of pattern of files which should be included
-        (e.g. '*.csv').
+        (e.g. '20*.csv').
     recursive : Boolean, if TRUE subdirectories will be included as well.
     action : One of ('union', 'save', 'both') which defines the further
              handling of the files inside the folder after being read.
@@ -221,12 +222,15 @@ def sdf_from_folder(folder, attributes, sparksession, file_type='csv', file_patt
         raise ValueError("Action is not in 'union', 'save' or 'both'... \
         Aborting")
 
+    # adjust file_pattern if no specific one is given
+    if file_pattern==None:
+        file_pattern = '*.'+file_type
+
     # get file names
-    # get file names
-    file_names = files_in_folder(folder=folder, file_type=file_type, 
-                                 file_pattern=file_pattern, 
+    file_names = files_in_folder(folder=folder, file_type=file_type,
+                                 file_pattern=file_pattern,
                                  hdfs_flag=attributes.hdfs_flag,
-                                 recursive=recursive)        
+                                 recursive=recursive)
 
     # if files should be read, altered and saved
     if action in ('save', 'both'):
@@ -282,8 +286,9 @@ def sdf_from_folder(folder, attributes, sparksession, file_type='csv', file_patt
     return True
 
 
-def aggregate_chunks(feature_type, attributes, sparksession, unit='antenna_id',
-                     create_table=True, cache_table=False, query=None):
+def aggregate_chunks(feature_type, attributes, sparksession, file_pattern=None,
+                     unit='antenna_id', create_table=True, cache_table=False,
+                     query=None):
     """
     Specific function to aggregate files from chunked folders and run
     aggregation query.
@@ -293,6 +298,7 @@ def aggregate_chunks(feature_type, attributes, sparksession, unit='antenna_id',
     feature_type : Type of feature which should be aggregated (e.g. 'hour').
     attributes : Attributes class with specific options for current run.
     sparksession : Sparksession object defined by pyspark.
+    file_pattern : Type of files which need to be read, e.g. *.csv for csvs.
     unit : Name of column which represents the unit of aggregation.
     create_table : Boolean, if true, table will be created for further
         querying.
@@ -309,6 +315,7 @@ def aggregate_chunks(feature_type, attributes, sparksession, unit='antenna_id',
     # load in all items
     sdf = sdf_from_folder(folder=attributes.antenna_features_path +
                           feature_type+'/',
+                          file_pattern=file_pattern,
                           attributes=attributes, sparksession=sparksession,
                           recursive=True)
 
