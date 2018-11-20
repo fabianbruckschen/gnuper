@@ -26,7 +26,7 @@ def load_and_compute(user_id, attributes):
         # ignore massive warnings output for better speed
         B = bc.read_csv(user_id=user_id,
                         records_path=attributes.bandicoot_path,
-                        antennas_path=attributes.antennas_file,
+                        antennas_path=attributes.bandicoot_path+'antennas.csv',
                         describe=False,
                         warnings=False)
         # change weekend days and nocturnal time
