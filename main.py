@@ -187,256 +187,252 @@ if parts_to_run in ('all', '2'):
     n = len(chunks)
     print('Number of available user chunks: '+str(n))
 
-    # collect home antennas per chunk
-    home_antennas_list = []
-
     # ## LOOP
     # ### --- LOOP START ---
     for chunk in chunks:
-        i = chunks.index(chunk)+1
-        print('Starting with '+chunk+', iteration '+str(i)+' out of '+str(n))
+    i = chunks.index(chunk)+1
+    print('Starting with '+chunk+', iteration '+str(i)+' out of '+str(n))
 
-        # read in chunk and filter out machines and multi-users
-        raw_df = gn.sdf_from_folder(att.chunking_path+chunk+'/', att, spark,
-                                    header=True, inferSchema=False,
-                                    file_pattern='*.csv',
-                                    query=gn.queries.level0.filter_machines_query(
-                                    max_weekly_interactions=att.
-                                    max_weekly_interactions))
+    # read in chunk and filter out machines and multi-users
+    raw_df = gn.sdf_from_folder(att.chunking_path+chunk+'/', att, spark,
+                                header=True, inferSchema=False,
+                                file_pattern='*.csv',
+                                query=gn.queries.level0.filter_machines_query(
+                                max_weekly_interactions=att.
+                                max_weekly_interactions))
 
-        # quick look
-        if att.verbose and i == 1:
-            # double check file format
-            print('Raw aggregated SDF structure:')
-            raw_df.show(10)
+    # quick look
+    if att.verbose and i == 1:
+        # double check file format
+        print('Raw aggregated SDF structure:')
+        raw_df.show(10)
 
-        # and register as table
-        raw_df.createOrReplaceTempView('table_raw_df')
+    # and register as table
+    raw_df.createOrReplaceTempView('table_raw_df')
 
-        # ## home antennas
-        user_home_antenna_df = spark.sql(gn.queries.level1.user_home_antenna_query(
-                                         noct_time=att.noct_time,
-                                         table_name='table_raw_df'))
-        # save as table
-        user_home_antenna_df.createOrReplaceTempView('table_user_home_antenna_df')
-        # and append to ongoing list
-        home_antennas_list.append(user_home_antenna_df)
+    # number of files for each save
+    n_files = round(att.max_chunksize/10)
 
-        # unique users in this chunk (doublechecking)
-        n_users = raw_df.select('caller_id').distinct().count()
-        n_users_w_ha = user_home_antenna_df.select('user_id').distinct().count()
-        print('Ratio of users in this chunk with home antenna: '+str(n_users_w_ha/n_users))
+    # ## home antennas
+    user_home_antenna_df = spark.sql(gn.queries.level1.user_home_antenna_query(
+                                     noct_time=att.noct_time,
+                                     table_name='table_raw_df'))
+    # save as table
+    user_home_antenna_df.createOrReplaceTempView('table_user_home_antenna_df')
 
-        # **Level 1**: Intermediate tables on user level (user_id still visible)
+    user_home_antenna_df.coalesce(n_files)\
+        .write.csv(att.home_antennas_path+str(i), header=True,
+                   mode='overwrite')
 
-        # Datasets created in first iteration with columns in brackets:
-        # + **user_metrics**: metrics aggregated per user_id, day and hour
-        #  *(user_id, day, hour, og_calls, ic_calls, og_sms, ic_sms,
-        #    og_vol, ic_vol)*
-        # + **user_home_antenna**: monthly estimate of antenna closest to home
-        #  location per user *(user_id, antenna_id, month)*
-        # + **user_bandicoot_features**: bandicoot interactions on user level per
-        #  month *(user_id, month, ...)*
 
-        print('Starting with Level 1: Intermediate tables on user level \
-        (user_id still visible).')
+    # unique users in this chunk (doublechecking)
+    n_users = raw_df.select('caller_id').distinct().count()
+    n_users_w_ha = user_home_antenna_df.select('user_id').distinct().count()
+    print('Ratio of users in this chunk with home antenna: '+str(n_users_w_ha/n_users))
 
-        # #### user_metrics
-        user_metrics_df = spark.sql(gn.queries.level1.user_metrics_query(
-                                    table_name='table_raw_df'))
-        user_metrics_df.createOrReplaceTempView('table_user_metrics_df')
+    # **Level 1**: Intermediate tables on user level (user_id still visible)
 
-        # #### bandicoot_metrics
-        if att.bc_flag and not att.hdfs_flag:
-            # remove files from potential previous run
-            if os.path.exists(att.bandicoot_path):
-                shutil.rmtree(att.bandicoot_path)
+    # Datasets created in first iteration with columns in brackets:
+    # + **user_metrics**: metrics aggregated per user_id, day and hour
+    #  *(user_id, day, hour, og_calls, ic_calls, og_sms, ic_sms,
+    #    og_vol, ic_vol)*
+    # + **user_home_antenna**: monthly estimate of antenna closest to home
+    #  location per user *(user_id, antenna_id, month)*
+    # + **user_bandicoot_features**: bandicoot interactions on user level per
+    #  month *(user_id, month, ...)*
 
-            bc_metrics_df = spark.sql(gn.queries.level1.bc_metrics_query(
-                                      table_name='table_raw_df'))
+    print('Starting with Level 1: Intermediate tables on user level \
+    (user_id still visible).')
 
-            # define unique users
-            users = [str(u.caller_id) for u in bc_metrics_df.select('caller_id')
-                     .dropDuplicates().collect()]
+    # #### user_metrics
+    user_metrics_df = spark.sql(gn.queries.level1.user_metrics_query(
+                                table_name='table_raw_df'))
+    user_metrics_df.createOrReplaceTempView('table_user_metrics_df')
 
-            # save into single user folders
-            bc_metrics_df.coalesce(1).write.save(
-                        path=att.bandicoot_path,
-                        format='csv',
-                        header=True,
-                        mode='overwrite',
-                        partitionBy='caller_id')
+    # #### bandicoot_metrics
+    if att.bc_flag and not att.hdfs_flag:
+        # remove files from potential previous run
+        if os.path.exists(att.bandicoot_path):
+            shutil.rmtree(att.bandicoot_path)
 
-            # proper file naming and directory structure
-            # get all subdirectories in bandicoot folder
-            subdirs = next(os.walk(att.bandicoot_path))[1]
+        bc_metrics_df = spark.sql(gn.queries.level1.bc_metrics_query(
+                                  table_name='table_raw_df'))
 
-            for d in subdirs:
-                u = d.replace('caller_id=', '')  # extract user id
-                # rename csv to user id and move up
-                os.rename(glob.glob(att.bandicoot_path+d+'/*.csv')[0],
-                          att.bandicoot_path+u+'.csv')
-                shutil.rmtree(att.bandicoot_path+d)  # delete obsolete dir
-            print('Single User Files for bandicoot created for chunk '+str(i))
+        # define unique users
+        users = [str(u.caller_id) for u in bc_metrics_df.select('caller_id')
+                 .dropDuplicates().collect()]
 
-            # save antenna file in the same directory
-            antennas_locations.toPandas().to_csv(att.bandicoot_path+'antennas.csv',
-                                                 index=False)
+        # save into single user folders
+        bc_metrics_df.coalesce(1).write.save(
+                    path=att.bandicoot_path,
+                    format='csv',
+                    header=True,
+                    mode='overwrite',
+                    partitionBy='caller_id')
 
-            # execute bandicoot calculation as batch
-            indicators = gn.bc_batch(users, att)
+        # proper file naming and directory structure
+        # get all subdirectories in bandicoot folder
+        subdirs = next(os.walk(att.bandicoot_path))[1]
 
-            # save as csv
-            bc.io.to_csv(indicators, 'bandicoot_indicators_'+str(i)+'.csv')
-            print('Bandicoot files csvs created for chunk '+str(i))
+        for d in subdirs:
+            u = d.replace('caller_id=', '')  # extract user id
+            # rename csv to user id and move up
+            os.rename(glob.glob(att.bandicoot_path+d+'/*.csv')[0],
+                      att.bandicoot_path+u+'.csv')
+            shutil.rmtree(att.bandicoot_path+d)  # delete obsolete dir
+        print('Single User Files for bandicoot created for chunk '+str(i))
 
-            # re-read as single sdf
-            bc_metrics_df = spark.read.csv('bandicoot_indicators_' + str(i) +
-                                           '.csv', header=True, inferSchema=True)
+        # save antenna file in the same directory
+        antennas_locations.toPandas().to_csv(att.bandicoot_path+'antennas.csv',
+                                             index=False)
 
-            # cleaning
-            bc_metrics_df = bc_metrics_df\
-                .drop('reporting__antennas_path',
-                      'reporting__attributes_path',
-                      'reporting__recharges_path',
-                      'reporting__version',
-                      'reporting__code_signature',
-                      'reporting__groupby',
-                      'reporting__split_week',
-                      'reporting__split_day',
-                      'reporting__start_time',
-                      'reporting__end_time',
-                      'reporting__night_start',
-                      'reporting__night_end',
-                      'reporting__weekend',
-                      'reporting__number_of_antennas',
-                      'reporting__bins',
-                      'reporting__bins_with_data',
-                      'reporting__bins_without_data',
-                      'reporting__has_call',
-                      'reporting__has_text',
-                      'reporting__has_home',
-                      'reporting__has_recharges',
-                      'reporting__has_attributes',
-                      'reporting__has_network',
-                      'reporting__number_of_recharges',
-                      'reporting__percent_records_missing_location',
-                      'reporting__antennas_missing_locations',
-                      'reporting__percent_outofnetwork_calls',
-                      'reporting__percent_outofnetwork_texts',
-                      'reporting__percent_outofnetwork_contacts',
-                      'reporting__percent_outofnetwork_call_durations',
-                      'reporting__ignored_records__all',
-                      'reporting__ignored_records__interaction',
-                      'reporting__ignored_records__direction',
-                      'reporting__ignored_records__correspondent_id',
-                      'reporting__ignored_records__datetime',
-                      'reporting__ignored_records__call_duration',
-                      'reporting__ignored_records__location')
+        # execute bandicoot calculation as batch
+        indicators = gn.bc_batch(users, att)
 
-            # clean up to save space
-            if att.clean_up:
-                shutil.rmtree(att.bandicoot_path)
+        # save as csv
+        bc.io.to_csv(indicators, 'bandicoot_indicators_'+str(i)+'.csv')
+        print('Bandicoot files csvs created for chunk '+str(i))
 
-        # **Level 2**: Intermediate tables on antenna level
-        # (user_id NOT visible anymore)
+        # re-read as single sdf
+        bc_metrics_df = spark.read.csv('bandicoot_indicators_' + str(i) +
+                                       '.csv', header=True, inferSchema=True)
 
-        # Datasets created in second iteration with columns in brackets:
-        # + **antenna_interactions_generic**: alltime interactions between antennas
-        #  without allocation of home antenna locations but generic activity
-        #  *(og_antenna_id, ic_antenna_id, sms_count, calls_count, vol_sum)*
-        # + **antenna_metrics_week**: metrics aggregated per home antenna of
-        #  individual users, week and part of the week
-        #  *(antenna_id, week_part, week_number, og_calls, ic_calls, og_sms,
-        #  ic_sms, og_vol, ic_vol)*
-        # + **antenna_metrics_hourly**: metrics aggregated per home antenna of
-        #  individual users and hour
-        #  *(antenna_id, hour, og_calls, ic_calls, og_sms, ic_sms, og_vol, ic_vol)*
-        # + **antenna_interactions**: alltime interactions between antennas based
-        #  on the users' behavior to which a certain antenna is the homebase
-        #  *(antenna_id1, antenna_id2, sms_count, calls_count, vol_sum)*
-        # + **antenna_bandicoot**: alltime averaged bandicoot interactions on
-        #  antenna level *(antenna_id, ...)*
-        #
-        # A further explanation of the single features can be found
-        #  here[http://bandicoot.mit.edu/docs/reference/bandicoot.individual.html]
+        # cleaning
+        bc_metrics_df = bc_metrics_df\
+            .drop('reporting__antennas_path',
+                  'reporting__attributes_path',
+                  'reporting__recharges_path',
+                  'reporting__version',
+                  'reporting__code_signature',
+                  'reporting__groupby',
+                  'reporting__split_week',
+                  'reporting__split_day',
+                  'reporting__start_time',
+                  'reporting__end_time',
+                  'reporting__night_start',
+                  'reporting__night_end',
+                  'reporting__weekend',
+                  'reporting__number_of_antennas',
+                  'reporting__bins',
+                  'reporting__bins_with_data',
+                  'reporting__bins_without_data',
+                  'reporting__has_call',
+                  'reporting__has_text',
+                  'reporting__has_home',
+                  'reporting__has_recharges',
+                  'reporting__has_attributes',
+                  'reporting__has_network',
+                  'reporting__number_of_recharges',
+                  'reporting__percent_records_missing_location',
+                  'reporting__antennas_missing_locations',
+                  'reporting__percent_outofnetwork_calls',
+                  'reporting__percent_outofnetwork_texts',
+                  'reporting__percent_outofnetwork_contacts',
+                  'reporting__percent_outofnetwork_call_durations',
+                  'reporting__ignored_records__all',
+                  'reporting__ignored_records__interaction',
+                  'reporting__ignored_records__direction',
+                  'reporting__ignored_records__correspondent_id',
+                  'reporting__ignored_records__datetime',
+                  'reporting__ignored_records__call_duration',
+                  'reporting__ignored_records__location')
 
-        print('Starting with Level 2: Intermediate tables on antenna level\
-         (user_id NOT visible anymore).')
+        # clean up to save space
+        if att.clean_up:
+            shutil.rmtree(att.bandicoot_path)
 
-        # #### antenna_metrics_week
-        antenna_metrics_week_df = spark.sql(gn.queries.level2.antenna_metrics_week_query(
-                                            weekend_days=tuple(att.weekend_days),
-                                            table_name='table_user_metrics_df'))
+    # **Level 2**: Intermediate tables on antenna level
+    # (user_id NOT visible anymore)
 
-        # #### antenna_metrics_hourly
-        antenna_metrics_hourly_df = spark.sql(gn.queries.level2.antenna_metrics_hourly_query(
-                                              table_name='table_user_metrics_df'))
+    # Datasets created in second iteration with columns in brackets:
+    # + **antenna_interactions_generic**: alltime interactions between antennas
+    #  without allocation of home antenna locations but generic activity
+    #  *(og_antenna_id, ic_antenna_id, sms_count, calls_count, vol_sum)*
+    # + **antenna_metrics_week**: metrics aggregated per home antenna of
+    #  individual users, week and part of the week
+    #  *(antenna_id, week_part, week_number, og_calls, ic_calls, og_sms,
+    #  ic_sms, og_vol, ic_vol)*
+    # + **antenna_metrics_hourly**: metrics aggregated per home antenna of
+    #  individual users and hour
+    #  *(antenna_id, hour, og_calls, ic_calls, og_sms, ic_sms, og_vol, ic_vol)*
+    # + **antenna_interactions**: alltime interactions between antennas based
+    #  on the users' behavior to which a certain antenna is the homebase
+    #  *(antenna_id1, antenna_id2, sms_count, calls_count, vol_sum)*
+    # + **antenna_bandicoot**: alltime averaged bandicoot interactions on
+    #  antenna level *(antenna_id, ...)*
+    #
+    # A further explanation of the single features can be found
+    #  here[http://bandicoot.mit.edu/docs/reference/bandicoot.individual.html]
 
-        # #### antenna_interactions
-        antenna_interactions_df = spark.sql(gn.queries.level2.antenna_interactions_query(
-                                            table_name='table_raw_df'))
+    print('Starting with Level 2: Intermediate tables on antenna level\
+     (user_id NOT visible anymore).')
 
-        # uncache for memory
-        spark.catalog.clearCache()
+    # #### antenna_metrics_week
+    antenna_metrics_week_df = spark.sql(gn.queries.level2.antenna_metrics_week_query(
+                                        weekend_days=tuple(att.weekend_days),
+                                        table_name='table_user_metrics_df'))
 
-        # #### bandicoot_metrics
-        if att.bc_flag and not att.hdfs_flag:
-            # join home_antenna
-            join_cond = [bc_metrics_df.name == user_home_antenna_df.user_id]
-            bc_metrics_df = bc_metrics_df\
-                .join(user_home_antenna_df, join_cond, 'inner')\
-                .drop('user_id', 'name', 'month')
+    # #### antenna_metrics_hourly
+    antenna_metrics_hourly_df = spark.sql(gn.queries.level2.antenna_metrics_hourly_query(
+                                          table_name='table_user_metrics_df'))
 
-            # keep weight as number of users adding to each antenna
-            antenna_weight = bc_metrics_df.groupBy('antenna_id').count()
+    # #### antenna_interactions
+    antenna_interactions_df = spark.sql(gn.queries.level2.antenna_interactions_query(
+                                        table_name='table_raw_df'))
 
-            # calculate antenna means
-            antenna_bandicoot_features_df = bc_metrics_df.groupBy('antenna_id')\
-                .mean().drop('avg(antenna_id)')
-            # averaging drops out "delay" columns, because they are entirely empty
+    # uncache for memory
+    spark.catalog.clearCache()
 
-            # renaming the columns for better readability
-            clean_cols = [c.replace('avg(', '').replace(')', '') for c in
-                          antenna_bandicoot_features_df.columns]
-            antenna_bandicoot_features_df = antenna_bandicoot_features_df\
-                .toDF(*clean_cols)
+    # #### bandicoot_metrics
+    if att.bc_flag and not att.hdfs_flag:
+        # join home_antenna
+        join_cond = [bc_metrics_df.name == user_home_antenna_df.user_id]
+        bc_metrics_df = bc_metrics_df\
+            .join(user_home_antenna_df, join_cond, 'inner')\
+            .drop('user_id', 'name', 'month')
 
-            # add user weight
-            antenna_bandicoot_features_df = antenna_bandicoot_features_df\
-                .join(antenna_weight, 'antenna_id', 'inner')
+        # keep weight as number of users adding to each antenna
+        antenna_weight = bc_metrics_df.groupBy('antenna_id').count()
 
-        # #### save final outputs
-        antenna_metrics_week_df\
-            .write.csv(att.antenna_features_path+'week/'+str(i),
+        # calculate antenna means
+        antenna_bandicoot_features_df = bc_metrics_df.groupBy('antenna_id')\
+            .mean().drop('avg(antenna_id)')
+        # averaging drops out "delay" columns, because they are entirely empty
+
+        # renaming the columns for better readability
+        clean_cols = [c.replace('avg(', '').replace(')', '') for c in
+                      antenna_bandicoot_features_df.columns]
+        antenna_bandicoot_features_df = antenna_bandicoot_features_df\
+            .toDF(*clean_cols)
+
+        # add user weight
+        antenna_bandicoot_features_df = antenna_bandicoot_features_df\
+            .join(antenna_weight, 'antenna_id', 'inner')
+
+    # #### save final outputs
+    antenna_metrics_week_df.coalesce(n_files)\
+        .write.csv(att.antenna_features_path+'week/'+str(i),
+                   mode='overwrite', header=True)
+
+    antenna_metrics_hourly_df.coalesce(n_files)\
+        .write.csv(att.antenna_features_path+'hourly/'+str(i),
+                   mode='overwrite', header=True)
+
+    antenna_interactions_df.coalesce(n_files)\
+        .write.csv(att.antenna_features_path+'interactions/'+str(i),
+                   mode='overwrite', header=True)
+
+    if att.bc_flag:
+        antenna_bandicoot_features_df\
+            .write.csv(att.antenna_features_path+'bc/'+str(i),
                        mode='overwrite', header=True)
+        # remove temporary bandicoot file on user level
+        os.remove('bandicoot_indicators_'+str(i)+'.csv')
 
-        antenna_metrics_hourly_df\
-            .write.csv(att.antenna_features_path+'hourly/'+str(i),
-                       mode='overwrite', header=True)
-
-        antenna_interactions_df\
-            .write.csv(att.antenna_features_path+'interactions/'+str(i),
-                       mode='overwrite', header=True)
-
-        if att.bc_flag:
-            antenna_bandicoot_features_df\
-                .write.csv(att.antenna_features_path+'bc/'+str(i),
-                           mode='overwrite', header=True)
-            # remove temporary bandicoot file on user level
-            os.remove('bandicoot_indicators_'+str(i)+'.csv')
-
-        if i==n:
-            print('Done with all user chunks!')
+    if i==n:
+        print('Done with all user chunks!')
 
     # ### --- LOOP END ---
-
-    # collect home antennas for all users
-    home_antennas = gn.union_all(home_antennas_list)
-
-    # save home antennas for later
-    home_antennas.\
-        write.csv(att.home_antennas_path, header=True, mode='overwrite')
 
     spark.stop()
     # delete chunking files if clean up flag is set

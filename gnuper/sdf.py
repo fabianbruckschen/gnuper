@@ -102,7 +102,6 @@ def read_alter_save(file, sparksession, header=True, inferSchema=True,
                    partitionBy=save_partition)
     return True
 
-
 def union_all(df_list):
     """
     Recursive unioning function.
@@ -116,21 +115,31 @@ def union_all(df_list):
     ------
     Single SDF which unioned all elements of the input list.
     """
-    if len(df_list) > 1:
-        if len(df_list[0].head(1))==0: # if sdf is empty
-            return union_all(df_list[1:])
+    if len(df_list) > 1: # list has more than 1 element
+
+        if len(df_list[0].head(1))==0: # if first sdf is empty
+            return union_all(df_list[1:]) # ignore and continue
+
+        elif len(df_list[1].head(1))>0: # if second sdf is not empty
+            return df_list[0].union(union_all(df_list[1:])) # continue
+
+        elif len(df_list[1:])>1: # if empty but more sdfs in list
+            return df_list[0].union(union_all(df_list[2:])) # ignore 2nd sdf
+
         else:
-            return df_list[0].union(union_all(df_list[1:]))
+            return df_list[0] # if second sdf was last, return first element
     else:
         return df_list[0]
 
-def files_in_folder(folder, file_type='csv', file_pattern=None, hdfs_flag=False, recursive=False):
+def files_in_folder(folder, file_type='csv', file_pattern=None,
+                    hdfs_flag=False, recursive=False):
     """
     Function to list files in a folder locally or in HDFS.
 
     Inputs
     ------
     folder : Path to where the files are stored.
+    file_type : Type of files which are being considered.
     file_pattern : Only list certain types which match the pattern,
         e.g. 20*.csv
     hdfs_flag : Boolean if the searched folder is in a HDFS.
@@ -139,6 +148,11 @@ def files_in_folder(folder, file_type='csv', file_pattern=None, hdfs_flag=False,
     ------
     List of filepaths at the given location.
     """
+
+    # adjust file_pattern if no specific one is given
+    if file_pattern==None:
+        file_pattern = '*.'+file_type
+
     if hdfs_flag:
         # arguments for interacting with HDFS
         args = 'hdfs dfs -ls '+folder+' | grep .'+file_type
@@ -165,7 +179,9 @@ def files_in_folder(folder, file_type='csv', file_pattern=None, hdfs_flag=False,
         if recursive:
             subdirs = next(os.walk(folder))[1]
             for d in subdirs:
-                files.append(glob.glob(folder+d+'/'+file_pattern)[0])
+                files.append(glob.glob(folder+d+'/'+file_pattern))
+            # unnest list
+            files = sum(files, [])
     return files
 
 def sdf_from_folder(folder, attributes, sparksession, file_type='csv', file_pattern=None,
@@ -222,10 +238,6 @@ def sdf_from_folder(folder, attributes, sparksession, file_type='csv', file_patt
         raise ValueError("Action is not in 'union', 'save' or 'both'... \
         Aborting")
 
-    # adjust file_pattern if no specific one is given
-    if file_pattern==None:
-        file_pattern = '*.'+file_type
-
     # get file names
     file_names = files_in_folder(folder=folder, file_type=file_type,
                                  file_pattern=file_pattern,
@@ -256,11 +268,13 @@ def sdf_from_folder(folder, attributes, sparksession, file_type='csv', file_patt
         if attributes.hdfs_flag or not attributes.mp_flag:
             pbar = tqdm(total=len(file_names), desc='Read Files', leave=True)
             for file in file_names:
-                raw_df_list.append(read_as_sdf(file, sparksession=sparksession,
+                sdf = read_as_sdf(file, sparksession=sparksession,
                                                header=header,
                                                inferSchema=inferSchema,
                                                colnames=colnames,
-                                               query=query))
+                                               query=query)
+                if len(sdf.head(1))>0: # only if sdf is not empty
+                    raw_df_list.append(sdf)
                 pbar.update(1)
         else:
             # assuming 2 threads per processor
