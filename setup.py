@@ -17,11 +17,11 @@ setuptools.setup(
     install_requires=[
           'bandicoot==0.5.3',
           'glob2==0.5',
-          'numpy==1.13.3',
+          'numpy',
           'numpydoc==0.7.0',
           'pandas==0.23.3',
           'py4j==0.10.7',
-          'pyspark==2.3.1',
+          'pyspark',
           'tqdm==4.21.0'
       ],
     classifiers=[
