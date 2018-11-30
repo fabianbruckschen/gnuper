@@ -10,24 +10,24 @@ bc_flag : If set, the time intensive bandicoot indicators are being calculated
           as well.
 hdfs_flag : If set, the data is saved in an HDFS (Depending on location of raw
             CDRs).
-no_info : If set, no additional info about data structure or size are being
+verbose : If set, no additional info about data structure or size are being
           printed in order to save time.
 clean_up : If set, intermediate directories and files are being deleted after
            they have been used.
 raw_data_path : Can be set to an alternate path (e.g. ../test_data/), default
                 is 'data' folder in the parent directory (../data/).
+sparkmaster : On what filesystem Spark is supposed to run (local, yarn, ...).
 parts_to_run : Process is split into three parts which can be executed
                separately.
 """
 
 import os  # operating system functions like renaming files and directories
-import subprocess  # for python to interact with the HDFS
 import shutil  # recursive file and directory operations
 import glob  # pattern matching for paths
-import pandas as pd  # data mangling and transforming
-import bandicoot as bc  # MIT toolkit for creating bandicoot indicators
 import argparse  # entering flags from the cmd line
+import bandicoot as bc  # MIT toolkit for creating bandicoot indicators
 import gnuper as gn  # gnuper package for creating cdr features
+import pyarrow as pa  # for python to interact with the HDFS
 from pyspark.sql import SparkSession  # using spark context for big data files
 from pyspark.sql.functions import col  # needed for function over each column
 
@@ -258,10 +258,11 @@ if parts_to_run in ('all', '2'):
         user_metrics_df.createOrReplaceTempView('table_user_metrics_df')
 
         # #### bandicoot_metrics
-        if att.bc_flag and not att.hdfs_flag:
-            # remove files from potential previous run
-            if os.path.exists(att.bandicoot_path):
-                shutil.rmtree(att.bandicoot_path)
+        if att.bc_flag:
+            if not att.hdfs_flag:
+                # remove files from potential previous run
+                if os.path.exists(att.bandicoot_path):
+                    shutil.rmtree(att.bandicoot_path)
 
             bc_metrics_df = spark.sql(gn.queries.level1.bc_metrics_query(
                                       table_name='table_raw_df'))
