@@ -4,6 +4,7 @@ import os  # operating system functions like renaming files and directories
 import re  # regular expressions
 import fnmatch  # filtering lists
 import glob  # pattern matching for local paths
+import subprocess  # for python to interact with the HDFS
 from tqdm import tqdm  # progress bar for large tasks
 from multiprocessing.pool import ThreadPool  # enables spark multithreading
 from functools import partial  # multiprocessing with several arguments
@@ -154,7 +155,24 @@ def files_in_folder(folder, file_type='csv', file_pattern=None,
         file_pattern = '*.'+file_type
 
     if hdfs_flag:
-        files = ls_hdfs(folder, recursive=recursive)
+#         files = ls_hdfs(folder, recursive=recursive)
+        # arguments for interacting with HDFS
+        args = 'hdfs dfs -ls '+folder+' | grep .'+file_type
+        if recursive: # recursive flag
+            args = args.replace(' -ls ', ' -ls -R ', 1)
+        p = subprocess.Popen(args,
+                             shell=True,
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.STDOUT)
+        s_output, s_err = p.communicate() # save output
+        # decode from bytes to string and split by file
+        raw_file_info = s_output.decode('utf-8').split('\n')
+        # remove last string if cmd ended with a linebreak (most likely)
+        if raw_file_info[-1] == '':
+            del(raw_file_info[-1])
+        # only keep file_names and remove other info
+        files = sorted([f.split()[-1] for f in raw_file_info])
+
         # filter results list for specific files
         files = fnmatch.filter(files, '*'+file_pattern)
     else:
