@@ -21,6 +21,7 @@ setuptools.setup(
           'numpydoc==0.7.0',
           'pandas==0.23.3',
           'py4j==0.10.7',
+          'pyarrow',
           'pyspark',
           'tqdm==4.21.0'
       ],
