@@ -8,7 +8,6 @@ import subprocess  # for python to interact with the HDFS
 from tqdm import tqdm  # progress bar for large tasks
 from multiprocessing.pool import ThreadPool  # enables spark multithreading
 from functools import partial  # multiprocessing with several arguments
-from .hdfs import ls_hdfs  # internal function for listing hdfs files
 
 
 def read_as_sdf(file, sparksession, header=True, inferSchema=True,
@@ -46,7 +45,8 @@ def read_as_sdf(file, sparksession, header=True, inferSchema=True,
 
         if query is not None:  # execute query if given
             table_name = 'table_'+re.sub('\W+','',
-                                         os.path.splitext(os.path.basename(file))[0])
+                                         os.path.splitext(os.path
+                                                          .basename(file))[0])
             sdf.createOrReplaceTempView(table_name)
             sdf = sparksession.sql(query % {'table_name': table_name})
 
@@ -103,6 +103,7 @@ def read_alter_save(file, sparksession, header=True, inferSchema=True,
                    partitionBy=save_partition)
     return True
 
+
 def union_all(df_list):
     """
     Recursive unioning function.
@@ -116,21 +117,22 @@ def union_all(df_list):
     ------
     Single SDF which unioned all elements of the input list.
     """
-    if len(df_list) > 1: # list has more than 1 element
+    if len(df_list) > 1:  # list has more than 1 element
 
-        if len(df_list[0].head(1))==0: # if first sdf is empty
-            return union_all(df_list[1:]) # ignore and continue
+        if len(df_list[0].head(1)) == 0:  # if first sdf is empty
+            return union_all(df_list[1:])  # ignore and continue
 
-        elif len(df_list[1].head(1))>0: # if second sdf is not empty
-            return df_list[0].union(union_all(df_list[1:])) # continue
+        elif len(df_list[1].head(1)) > 0:  # if second sdf is not empty
+            return df_list[0].union(union_all(df_list[1:]))  # continue
 
-        elif len(df_list[1:])>1: # if empty but more sdfs in list
-            return df_list[0].union(union_all(df_list[2:])) # ignore 2nd sdf
+        elif len(df_list[1:]) > 1:  # if empty but more sdfs in list
+            return df_list[0].union(union_all(df_list[2:]))  # ignore 2nd sdf
 
         else:
-            return df_list[0] # if second sdf was last, return first element
+            return df_list[0]  # if second sdf was last, return first element
     else:
         return df_list[0]
+
 
 def files_in_folder(folder, file_type='csv', file_pattern=None,
                     hdfs_flag=False, recursive=False):
@@ -151,20 +153,19 @@ def files_in_folder(folder, file_type='csv', file_pattern=None,
     """
 
     # adjust file_pattern if no specific one is given
-    if file_pattern==None:
+    if file_pattern is None:
         file_pattern = '*.'+file_type
 
     if hdfs_flag:
-#         files = ls_hdfs(folder, recursive=recursive)
         # arguments for interacting with HDFS
         args = 'hdfs dfs -ls '+folder+' | grep .'+file_type
-        if recursive: # recursive flag
+        if recursive:  # recursive flag
             args = args.replace(' -ls ', ' -ls -R ', 1)
         p = subprocess.Popen(args,
                              shell=True,
                              stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT)
-        s_output, s_err = p.communicate() # save output
+        s_output, s_err = p.communicate()  # save output
         # decode from bytes to string and split by file
         raw_file_info = s_output.decode('utf-8').split('\n')
         # remove last string if cmd ended with a linebreak (most likely)
@@ -186,9 +187,10 @@ def files_in_folder(folder, file_type='csv', file_pattern=None,
             files = sum(files, [])
     return files
 
-def sdf_from_folder(folder, attributes, sparksession, file_type='csv', file_pattern=None,
-                    recursive=False, header=True, inferSchema=True,
-                    colnames=None, query=None,
+
+def sdf_from_folder(folder, attributes, sparksession, file_type='csv',
+                    file_pattern=None, recursive=False, header=True,
+                    inferSchema=True, colnames=None, query=None,
                     save_path=None, save_format='csv', save_header=True,
                     save_mode='append', save_partition=None,
                     action='union'):
@@ -271,11 +273,9 @@ def sdf_from_folder(folder, attributes, sparksession, file_type='csv', file_patt
             pbar = tqdm(total=len(file_names), desc='Read Files', leave=True)
             for file in file_names:
                 sdf = read_as_sdf(file, sparksession=sparksession,
-                                               header=header,
-                                               inferSchema=inferSchema,
-                                               colnames=colnames,
-                                               query=query)
-                if len(sdf.head(1))>0: # only if sdf is not empty
+                                  header=header, inferSchema=inferSchema,
+                                  colnames=colnames, query=query)
+                if len(sdf.head(1)) > 0:  # only if sdf is not empty
                     raw_df_list.append(sdf)
                 pbar.update(1)
         else:
