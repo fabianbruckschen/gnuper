@@ -5,7 +5,7 @@ with open("README.rst", "r") as fh:
 
 setuptools.setup(
     name="gnuper",
-    version="0.0.2",
+    version="0.0.3",
     author="Fabian Bruckschen",
     author_email="fabian@knuper.com",
     description="Open Source Package for Mobile Phone Metadata Preprocessing",
@@ -21,7 +21,8 @@ setuptools.setup(
           'numpydoc==0.7.0',
           'pandas==0.23.3',
           'py4j==0.10.7',
-          'pyspark',
+          'pyarrow',
+          'pyspark==2.3.1',
           'tqdm==4.21.0'
       ],
     classifiers=[
