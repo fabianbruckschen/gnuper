@@ -24,7 +24,6 @@ import os  # operating system functions like renaming files and directories
 import subprocess  # for python to interact with the HDFS
 import shutil  # recursive file and directory operations
 import glob  # pattern matching for paths
-import pandas as pd  # data mangling and transforming
 import bandicoot as bc  # MIT toolkit for creating bandicoot indicators
 import argparse  # entering flags from the cmd line
 import gnuper as gn  # gnuper package for creating cdr features
@@ -34,7 +33,8 @@ from pyspark.sql.functions import col  # needed for function over each column
 # Preparations
 if __name__ == "__main__":
     # command line options
-    parser = argparse.ArgumentParser(description='Options which can be entered via cmd.')
+    parser = argparse.ArgumentParser(description='Options which can be entered\
+     via cmd.')
     parser.add_argument("--mp_flag", action='store_true',
                         help="Enabling Multiprocessing where feasible",
                         default=False)
@@ -54,7 +54,8 @@ if __name__ == "__main__":
     parser.add_argument("--raw_data_path",
                         help="Location of raw data, end with /")
     parser.add_argument("--sparkmaster",
-                        help="If data stored locally 'local[*]', if hdfs 'yarn'.")
+                        help="If data stored locally 'local[*]',\
+                         if hdfs 'yarn'.")
     parser.add_argument("--parts_to_run",
                         help="Define parts of the script which should be run")
     parsed_args = parser.parse_args()
@@ -101,9 +102,10 @@ if parts_to_run in ('all', '1'):
     # read cell and antenna locations into a spark dataframe (sdf)
     raw_locations = gn.read_as_sdf(file=att.raw_locations,
                                    sparksession=spark, header=False,
-                                    colnames=['cell_id', 'antenna_id',
-                                              'longitude', 'latitude'],
-                                    query=gn.queries.general.raw_locations_query())
+                                   colnames=['cell_id', 'antenna_id',
+                                             'longitude', 'latitude'],
+                                   query=gn.queries.general
+                                   .raw_locations_query())
     # create raw table to query and cache it as we will query it for every day
     raw_locations.createOrReplaceTempView('table_raw_locations')
     spark.catalog.cacheTable('table_raw_locations')
@@ -130,14 +132,16 @@ if parts_to_run in ('all', '1'):
 
     # order of the raw columns
     raw_colnames = ['CALL_RECORD_TYPE', 'CALLER_MSISDN', 'CALL_DATE',
-                    'BASIC_SERVICE', 'MS_LOCATION', 'CALL_PARTNER_IDENTITY_TYPE',
+                    'BASIC_SERVICE', 'MS_LOCATION',
+                    'CALL_PARTNER_IDENTITY_TYPE',
                     'CALL_PARTNER_IDENTITY', 'TAC_CODE', 'CALL_DURATION']
 
     # reading in user_ids
     users = gn.sdf_from_folder(folder=att.raw_data_path, attributes=att,
                                sparksession=spark, file_pattern='20*.csv',
                                header=False, colnames=raw_colnames,
-                               query=gn.queries.general.get_user_ids_query(), action='union')
+                               query=gn.queries.general.get_user_ids_query(),
+                               action='union')
     # drop duplicate ids and create table to query
     users = users.dropDuplicates()
     users.createOrReplaceTempView('table_user_ids')
@@ -182,7 +186,8 @@ if parts_to_run in ('all', '2'):
 
     # ## User chunks
     if att.hdfs_flag:
-        args = "hdfs dfs -ls -R "+att.chunking_path+" | grep drwx | awk -F'/' '{print $NF}'"
+        args = "hdfs dfs -ls -R " + att.chunking_path + \
+               " | grep drwx | awk -F'/' '{print $NF}'"
         p = subprocess.Popen(args,
                              shell=True,
                              stdout=subprocess.PIPE,
@@ -205,7 +210,8 @@ if parts_to_run in ('all', '2'):
         raw_df = gn.sdf_from_folder(att.chunking_path+chunk+'/', att, spark,
                                     header=True, inferSchema=False,
                                     file_pattern='*.csv',
-                                    query=gn.queries.level0.filter_machines_query(
+                                    query=gn.queries.level0
+                                    .filter_machines_query(
                                         max_weekly_interactions=att.
                                         max_weekly_interactions))
 
@@ -222,23 +228,22 @@ if parts_to_run in ('all', '2'):
         n_files = 10
 
         # ## home antennas
-        user_home_antenna_df = spark.sql(gn.queries.level1.user_home_antenna_query(
-                                         noct_time=att.noct_time,
-                                         table_name='table_raw_df'))
+        user_home_antenna_df = spark.sql(gn.queries.level1
+                                         .user_home_antenna_query(
+                                            noct_time=att.noct_time,
+                                            table_name='table_raw_df'))
         # save as table
-        user_home_antenna_df.createOrReplaceTempView('table_user_home_antenna_df')
+        user_home_antenna_df.createOrReplaceTempView(
+                            'table_user_home_antenna_df')
 
         user_home_antenna_df.coalesce(n_files)\
             .write.csv(att.home_antennas_path+str(i), header=True,
                        mode='overwrite')
 
-
         # unique users in this chunk (doublechecking)
         n_users = raw_df.select('caller_id').distinct().count()
-        n_users_w_ha = user_home_antenna_df.select('user_id').distinct().count()
-        print('Ratio of users in this chunk with home antenna: '+str(n_users_w_ha/n_users))
 
-        # **Level 1**: Intermediate tables on user level (user_id still visible)
+        # **Level 1**: Intermediate tables on user level, user_id still visible
 
         # Datasets created in first iteration with columns in brackets:
         # + **user_metrics**: metrics aggregated per user_id, day and hour
@@ -246,8 +251,8 @@ if parts_to_run in ('all', '2'):
         #    og_vol, ic_vol)*
         # + **user_home_antenna**: monthly estimate of antenna closest to home
         #  location per user *(user_id, antenna_id, month)*
-        # + **user_bandicoot_features**: bandicoot interactions on user level per
-        #  month *(user_id, month, ...)*
+        # + **user_bandicoot_features**: bandicoot interactions on user level
+        #  per month *(user_id, month, ...)*
 
         print('Starting with Level 1: Intermediate tables on user level \
         (user_id still visible).')
@@ -267,8 +272,8 @@ if parts_to_run in ('all', '2'):
                                       table_name='table_raw_df'))
 
             # define unique users
-            users = [str(u.caller_id) for u in bc_metrics_df.select('caller_id')
-                     .dropDuplicates().collect()]
+            users = [str(u.caller_id) for u in bc_metrics_df
+                     .select('caller_id').dropDuplicates().collect()]
 
             # save into single user folders
             bc_metrics_df.coalesce(1).write.save(
@@ -291,7 +296,8 @@ if parts_to_run in ('all', '2'):
             print('Single User Files for bandicoot created for chunk '+str(i))
 
             # save antenna file in the same directory
-            antennas_locations.toPandas().to_csv(att.bandicoot_path+'antennas.csv',
+            antennas_locations.toPandas().to_csv(att.bandicoot_path +
+                                                 'antennas.csv',
                                                  index=False)
 
             # execute bandicoot calculation as batch
@@ -303,7 +309,8 @@ if parts_to_run in ('all', '2'):
 
             # re-read as single sdf
             bc_metrics_df = spark.read.csv('bandicoot_indicators_' + str(i) +
-                                           '.csv', header=True, inferSchema=True)
+                                           '.csv', header=True,
+                                           inferSchema=True)
 
             # cleaning
             bc_metrics_df = bc_metrics_df\
