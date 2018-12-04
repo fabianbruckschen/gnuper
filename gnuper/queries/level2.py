@@ -6,7 +6,7 @@ def antenna_metrics_week_query(weekend_days,
                                table_name='%(table_name)s'):
     """
     Further aggregate user event counts by part of the week (i.e. weekend
-    or week days) as well as the week of the year ittherefore
+    or week days) as well as the week of the year therefore
     ignoring the hour. Most importantly aggregate up to the antenna level
     for all users who are predicted to live inside an antennas coverage
     (home antenna).
@@ -96,7 +96,7 @@ def antenna_metrics_hourly_query(table_name='%(table_name)s'):
 
 def antenna_interactions_query(table_name='%(table_name)s'):
     """
-    Per each antenna pair which had at least one event occuring, three
+    Per each antenna pair which had at least one event occurring, three
     features are being created. Counts of all sms and calls as well as
     the summed up seconds of all calls.
 
