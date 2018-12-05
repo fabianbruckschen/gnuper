@@ -24,10 +24,10 @@ parts_to_run : Process is split into three parts which can be executed
 import os  # operating system functions like renaming files and directories
 import shutil  # recursive file and directory operations
 import glob  # pattern matching for paths
+import subprocess  # execute shell commands
 import argparse  # entering flags from the cmd line
 import bandicoot as bc  # MIT toolkit for creating bandicoot indicators
 import gnuper as gn  # gnuper package for creating cdr features
-import pyarrow as pa  # for python to interact with the HDFS
 from pyspark.sql import SparkSession  # using spark context for big data files
 from pyspark.sql.functions import col  # needed for function over each column
 
