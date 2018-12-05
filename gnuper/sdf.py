@@ -44,7 +44,7 @@ def read_as_sdf(file, sparksession, header=True, inferSchema=True,
                 sdf = sdf.toDF(*colnames)
 
         if query is not None:  # execute query if given
-            table_name = 'table_'+re.sub('\W+','',
+            table_name = 'table_'+re.sub('\W+', '',
                                          os.path.splitext(os.path
                                                           .basename(file))[0])
             sdf.createOrReplaceTempView(table_name)
