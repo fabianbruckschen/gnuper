@@ -2,7 +2,11 @@
 General Queries."""
 
 
-def raw_locations_query(table_name='%(table_name)s'):
+def raw_locations_query(table_name='%(table_name)s',
+                        cell_name='cell_id',
+                        antenna_name='antenna_id',
+                        long_name='longitude',
+                        lat_name='latitude'):
     """
     Extract raw locations of cells and antennas while getting rid of
     potential duplicates.
@@ -11,6 +15,11 @@ def raw_locations_query(table_name='%(table_name)s'):
     ------
     table_name : Name of the table the query is supposed to run on,
                  defaulting to '%(table_name)s', i.e. no substitution.
+    cell_name : Name of the column which holds the ids of single cells/bts.
+    antenna_name : Name of the column which holds the ids of the antennas/towers
+                   (i.e. unique GPS coordinates per id).
+    long_name : Name of column which holds the longitude coordinate.
+    lat_name : Name of column which holds the latitude coordinate.
 
     Output
     ------
@@ -25,10 +34,10 @@ def raw_locations_query(table_name='%(table_name)s'):
         FROM
         (
             SELECT
-              cell_id,
-              antenna_id,
-              ROUND(longitude, 6) as longitude, -- 6 digits are sufficient
-              ROUND(latitude, 6) as latitude -- to identify humans
+              %(cell_name) as cell_id,
+              %(antenna_name) as antenna_id,
+              ROUND(%(long_name), 6) as longitude, -- 6 digits are sufficient
+              ROUND(%(lat_name), 6) as latitude -- to identify humans
             FROM %(table_name)s
         )
         GROUP BY cell_id, antenna_id -- kick duplicates
