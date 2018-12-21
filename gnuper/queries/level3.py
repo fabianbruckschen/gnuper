@@ -229,8 +229,8 @@ def interaction_features_query(c_coord, n_home_antennas,
                  between 0 and 1.
     X_entropy: Entropy means the informative content of an antenna based
                on the interactions of all antennas. It's being calculated
-               with the basic formula for entropy,
-               -sum(probability*ln(probability)), where probability is
+               with the formula for the Shannon Entropy,
+               -sum(probability*log(2, probability)), where probability is
                based on the percentage of events happening between each
                pair of antennas over all events.
     Additionally the feature dist2c tracks the distance of an antenna to
@@ -258,8 +258,8 @@ def interaction_features_query(c_coord, n_home_antennas,
           COUNT(DISTINCT IF(NOT ISNULL(sms_count), antenna_id2, NULL))/
            %(n_home_antennas)s as sms_isolation,
           -- entropy
-          -SUM(calls_proportion*LN(calls_proportion)) as calls_entropy,
-          -SUM(sms_proportion*LN(sms_proportion)) as sms_entropy,
+          -SUM(calls_proportion*LOG(2, calls_proportion)) as calls_entropy,
+          -SUM(sms_proportion*LOG(2, sms_proportion)) as sms_entropy,
           dist2c
         FROM
         (
