@@ -51,6 +51,7 @@ def flatten(container):
         else:
             yield i
 
+
 def r_search(fs, flist):
     """
     Helper function for recursively searching the HDFS.

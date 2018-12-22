@@ -106,7 +106,7 @@ def chunking_query_by_n_interactions(table_name='%(table_name)s',
 
 
 def chunking_query_by_n_users(table_name='%(table_name)s',
-                             max_chunksize=50000):
+                              max_chunksize=50000):
     """
     Create a chunk_id which is based on the unique users (caller_id) and
     the maximum size of users per chunk defined in attributes.
