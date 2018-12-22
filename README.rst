@@ -21,19 +21,23 @@ Each level represents another aggregation or transformation step. The color codi
 
 - **Level 0**
 This level simply unifies and preprocesses (kick out unnecessary information) the raw format. Also obvious machines are being filtered as well as the files restructured into chunks of users.
+
 - **Level 1**
 For each user a home antenna is being estimated and then interactions aggregated on user level per day and hour. Also bandicoot variables might be calculated if the flag is set.
+
 - **Level 2**
 Antenna level. Users are being allocated to their home antenna and then aggregated in three different categories. First, for each week between weekend or holidays and working days. Second, for every hour of the day irrespective of the date. And third, for all interactions between each pair of antennas.
+
 - **Level 3**
 Features are being created for several categories:
 *alltime* (ratios & scaled) - over the whole time period
 *variance* (variances over weeks) - to catch regional variation
 *daily* (outgoing vs. incoming, week parts) - differences between working days and weekends/holidays
 *hourly* (workday, peaks) - differences between the usual working day and several peaks
-*interactions* (distance, isolation, entropy)
-*active users* (per home antenna)
+*interactions* (distance, isolation, entropy) - network and geolocation related
+*active users* (per home antenna) - number of users allocated to an antenna as their home antenna
 For the exact formulas, have a look at the specific queries.
+
 - **Level 4**
 Unite the feature categories with the bandicoot features (aggregated on antenna level) to one final dataset, ready for analysis.
 
