@@ -6,10 +6,11 @@ def alltime_features_query(table_name='%(table_name)s'):
     """
     Create alltime features which are part of the final feature set.
     All features are either independent of total magnitude or scaled.
-    X_ratio: Feature calculates the ratio of outgoing OVER incoming
-             events over the whole time period.
-    scaled_X: Feature scales event or volume to be bound between 0 and 1
-              relative to all other antennas.
+
+    X_ratio: This feature category calculates the ratio of outgoing OVER
+             incoming events over the whole time period.
+    scaled_X: This feature category scales event or volume to be bound between
+              0 and 1 relative to all other antennas.
 
     Inputs
     ------
@@ -103,8 +104,8 @@ def daily_features_query(table_name='%(table_name)s'):
     """
     Create daily features which are part of the final feature set.
     For outgoing and incoming events separately, the percentages of
-    number of events (or total duration) happening on the weekend are
-    being calculated. These features are bound between 0 and 1.
+    number of events (or total duration) happening on the weekend or holidays
+    are being calculated. These features are bound between 0 and 1.
 
     Inputs
     ------
@@ -119,34 +120,36 @@ def daily_features_query(table_name='%(table_name)s'):
     query = """
         SELECT
           antenna_id,
-          -- og week ratios (weekend over all week)
-          SUM(IF(week_part = 'weekend', og_calls, NULL))/SUM(og_calls)
-           as og_calls_week_ratio,
-          SUM(IF(week_part = 'weekend', og_sms, NULL))/SUM(og_sms)
-           as og_sms_week_ratio,
-          SUM(IF(week_part = 'weekend', og_vol, NULL))/SUM(og_vol)
-           as og_vol_week_ratio,
-          -- ic week ratios (weekend over all week)
-          SUM(IF(week_part = 'weekend', ic_calls, NULL))/SUM(ic_calls)
-           as ic_calls_week_ratio,
-          SUM(IF(week_part = 'weekend', ic_sms, NULL))/SUM(ic_sms)
-           as ic_sms_week_ratio,
-          SUM(IF(week_part = 'weekend', ic_vol, NULL))/SUM(ic_vol)
-           as ic_vol_week_ratio
+          -- og week ratios (weekend/holidays over all week)
+          SUM(IF(week_part IN ('weekend', 'holiday'), og_calls, NULL))/
+            SUM(og_calls) as og_calls_week_ratio,
+          SUM(IF(week_part IN ('weekend', 'holiday'), og_sms, NULL))/
+            SUM(og_sms) as og_sms_week_ratio,
+          SUM(IF(week_part IN ('weekend', 'holiday'), og_vol, NULL))/
+            SUM(og_vol) as og_vol_week_ratio,
+          -- ic week ratios (weekend/holidays over all week)
+          SUM(IF(week_part IN ('weekend', 'holiday'), ic_calls, NULL))/
+            SUM(ic_calls) as ic_calls_week_ratio,
+          SUM(IF(week_part IN ('weekend', 'holiday'), ic_sms, NULL))/
+            SUM(ic_sms) as ic_sms_week_ratio,
+          SUM(IF(week_part IN ('weekend', 'holiday'), ic_vol, NULL))/
+            SUM(ic_vol) as ic_vol_week_ratio
         FROM %(table_name)s
         GROUP BY antenna_id
     """
     return query % {'table_name': table_name}
 
 
-def hourly_features_query(work_day, early_peak, late_peak,
-                          table_name='%(table_name)s'):
+def hourly_features_query(table_name='%(table_name)s',
+                          work_day={'begin': 9, 'end': 17},
+                          early_peak={'begin': 3, 'end': 5},
+                          late_peak={'begin': 10, 'end': 12}):
     """
     Create hourly features which are part of the final feature set.
     For outgoing and incoming events separately, the percentages of
     number of events (or total duration) happening during several
-    predefined periods (attributes class) are being calculated. There are
-    three periods:
+    predefined periods (input as dictionary with begin and end keys) are being
+    calculated. There are three periods:
     workday (wd): Defaults to 9 am to 5 pm. General working hours.
     early peak (ep): Defaults to 3 am to 5 am. Tries to catch blue collar
                      or rural activity.
@@ -216,8 +219,10 @@ def hourly_features_query(work_day, early_peak, late_peak,
                     'lp_end': late_peak['end']}
 
 
-def interaction_features_query(c_coord, n_home_antennas,
-                               table_name='%(table_name)s'):
+def interaction_features_query(table_name='%(table_name)s',
+                               c_coord={'latitude': 52.52437,
+                                        'longitude': 13.41053},
+                               n_home_antennas=1):
     """
     Create interaction features which are part of the final feature set.
     For both event types (call, sms) three features are being created.
