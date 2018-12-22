@@ -2,11 +2,12 @@
 Level 1."""
 
 
-def user_home_antenna_query(noct_time, table_name='%(table_name)s'):
+def user_home_antenna_query(table_name='%(table_name)s',
+                            noct_time={'begin': 19, 'end': 7}):
     """
     Define a monthly home antenna per user, i.e. where does a user have
-    the most interactions during that month during the defined
-    night time window (see attributes class).
+    the most interactions during that month during a defined
+    night time window.
 
     Inputs
     ------
