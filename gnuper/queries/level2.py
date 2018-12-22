@@ -2,11 +2,12 @@
 Level 2."""
 
 
-def antenna_metrics_week_query(weekend_days,
-                               table_name='%(table_name)s'):
+def antenna_metrics_week_query(table_name='%(table_name)s',
+                               weekend_days=(6,7),
+                               holidays=('')):
     """
-    Further aggregate user event counts by part of the week (i.e. weekend
-    or week days) as well as the week of the year therefore
+    Further aggregate user event counts by part of the week (i.e. weekend,
+    holiday or workday) as well as the week of the year therefore
     ignoring the hour. Most importantly aggregate up to the antenna level
     for all users who are predicted to live inside an antennas coverage
     (home antenna).
@@ -16,13 +17,15 @@ def antenna_metrics_week_query(weekend_days,
     table_name : name of the table the query is supposed to run on,
                  defaulting to '%(table_name)s', i.e. no substitution
     weekend_days : days of the weeks which represent the weekend, input by
-                   numbers of the days of the week (Monday = 1, etc.) in an
-                   array, e.g. [6,7]
+                   numbers of the days of the week (Monday = 1, etc.) in a
+                   tuple, e.g. (6,7)
+    holidays : days during the timespan of interest which are national holidays,
+               in a tuple, e.g. ('2018-12-15', '2018-12-26')
 
     Output
     ------
-    Half-weekly (weekend and week days) antenna level aggregates of event
-    counts, no more user ids.
+    Part-weekly (weekend, holiday and working days) antenna level aggregates of
+    event counts, no more user ids.
     """
     query = """
         SELECT
@@ -40,8 +43,9 @@ def antenna_metrics_week_query(weekend_days,
           SELECT
             antenna_id,
             day,
-            IF(DATE_FORMAT(day, 'u') IN %(weekend_days)s,
-             'weekend', 'workday') as week_part, -- identify weekend days
+            IF(DATE_FORMAT(day, 'u') IN %(weekend_days)s, 'weekend',
+                IF(day IN %(holidays)s, 'holiday',
+                    'workday')) as week_part, -- identify weekend and holidays
             DATE_FORMAT(day, 'w') as week_number, -- identify exact week
             og_sms,
             ic_sms,
@@ -56,7 +60,8 @@ def antenna_metrics_week_query(weekend_days,
         GROUP BY antenna_id, week_part, week_number
     """
     return query % {'table_name': table_name,
-                    'weekend_days': weekend_days}
+                    'weekend_days': weekend_days,
+                    'holidays': holidays}
 
 
 def antenna_metrics_hourly_query(table_name='%(table_name)s'):
