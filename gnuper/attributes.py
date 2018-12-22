@@ -14,13 +14,14 @@ class Attributes:
                  chunking_path='user_chunks/',
                  bandicoot_path='user_bandicoot/',
                  antenna_features_path='antenna_features/',
-                 raw_locations='MS_LOCATION.csv',  # adjust
+                 raw_locations='locations.csv',  # adjust
                  antennas_path='antennas',
                  home_antennas_path='home_antennas/',
                  noct_begin=19, noct_end=7,  # adjust
                  work_begin=9, work_end=17,  # adjust
                  ep_begin=3, ep_end=5, lp_begin=10, lp_end=12,  # adjust
                  weekend_days=[6, 7],  # adjust
+                 holidays=['2018-01-01', '2018-12-25', '2018-12-26'],  # adjust
                  call_unit='s',  # minutes or seconds
                  max_chunksize=50000,  # adjust
                  max_weekly_interactions=1000,  # adjust
@@ -117,6 +118,8 @@ class Attributes:
         self.late_peak = {'begin': lp_begin, 'end': lp_end}  # late riser
         # define weekend (by number of weekday)
         self.weekend_days = weekend_days
+        # define array of days which are nationwide holidays
+        self.holidays = holidays
         # multiplicator to get call units to the level of seconds
         # (e.g. for minutes = 60)
         if call_unit == 's':
