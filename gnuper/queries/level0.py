@@ -2,8 +2,17 @@
 Level 0."""
 
 
-def raw_preprocessing_query(cump, timestamp_format='dd MMM yyyy HH:mm:ss',
-                            table_name='%(table_name)s'):
+def raw_preprocessing_query(table_name='%(table_name)s', cump=1,
+                            timestamp_format='dd MMM yyyy HH:mm:ss',
+                            user_cname='caller_id',
+                            service_cname='interaction',
+                            record_type_cname='direction',
+                            partner_cname='correspondent_id',
+                            partner_type_cname='national',
+                            date_cname='datetime',
+                            duration_cname='call_duration',
+                            cell_cname='cell_id'
+                            ):
     """
     Preprocess initial raw data by making columns more readable and
     transform data into unified format (timestamp, seconds as duration,
@@ -20,6 +29,18 @@ def raw_preprocessing_query(cump, timestamp_format='dd MMM yyyy HH:mm:ss',
            is minutes and 1 for seconds.
     timestamp_format : Format of original date or timestamp, which is needed
                         to interpret into right timestamp format.
+    user_cname : Name of the column which holds the ids of users.
+    service_cname : Name of the column which holds the type of event (2 = text
+                    & 1 = call).
+    record_type_cname : Name of the column which holds the direction of an
+                        event (1 = incoming & 2 = outgoing).
+    partner_cname : Name of the column which holds the ids of users on the
+                    other end.
+    partner_type_cname : Name of the column which holds the indicators for an
+                         event being national (=1) or international (=2).
+    date_cname : Name of the column which holds the timestamps for the events.
+    duration_cname : Name of the column which holds the duration of calls.
+    cell_cname : Name of the column which holds the ids of single cells/bts.
 
     Output
     ------
@@ -28,45 +49,54 @@ def raw_preprocessing_query(cump, timestamp_format='dd MMM yyyy HH:mm:ss',
     """
     query = """
         SELECT
-          CALLER_MSISDN as caller_id,
-          CASE BASIC_SERVICE WHEN 2 THEN 'text' ELSE 'call' END
+          cd.%(user_cname)s as caller_id,
+          CASE %(service_cname)s WHEN 2 THEN 'text' ELSE 'call' END
            as interaction,
-          CASE CALL_RECORD_TYPE WHEN 1 THEN 'in' ELSE 'out' END
+          CASE %(record_type_cname)s WHEN 1 THEN 'in' ELSE 'out' END
            as direction,
-          CALL_PARTNER_IDENTITY_TYPE as national,
-          CALL_PARTNER_IDENTITY as correspondent_id,
-          CAST(UNIX_TIMESTAMP(CALL_DATE, '%(timestamp_format)s')
+          %(partner_type_cname)s as national,
+          %(partner_cname)s as correspondent_id,
+          CAST(UNIX_TIMESTAMP(%(date_cname)s, '%(timestamp_format)s')
            AS TIMESTAMP) as datetime, -- transform to proper timestamp
-          INT(ROUND(CALL_DURATION*%(cump)s))
+          INT(ROUND(%(duration_cname)s*%(cump)s))
            as call_duration, -- calculate duration in seconds
           ms.antenna_id as antenna_id,
           ci.chunk_id as chunk_id
         FROM %(table_name)s cd
         JOIN table_raw_locations ms
-        ON cd.MS_LOCATION = ms.cell_id
+        ON cd.%(cell_cname)s = ms.cell_id
         JOIN table_chunk_ids ci
-        ON cd.CALLER_MSISDN = ci.caller_id
-        WHERE CALL_RECORD_TYPE IN (1,2)
-          AND BASIC_SERVICE IN (1,2)
+        ON cd.%(user_cname)s = ci.caller_id
+        WHERE %(record_type_cname)s IN (1,2)
+          AND %(service_cname)s IN (1,2)
         """
     return query % {'table_name': table_name,
                     'cump': cump,
-                    'timestamp_format': timestamp_format}
+                    'timestamp_format': timestamp_format,
+                    'user_cname': user_cname,
+                    'service_cname': service_cname,
+                    'record_type_cname': record_type_cname,
+                    'partner_cname': partner_cname,
+                    'partner_type_cname': partner_type_cname,
+                    'date_cname': date_cname,
+                    'duration_cname': duration_cname,
+                    'cell_cname': cell_cname}
 
 
 def filter_machines_query(max_weekly_interactions,
                           table_name='%(table_name)s'):
     """
-    Filter out user ids which have more weekly interactions than the
-    defined threshold in the attributes class. This query's purpose is
-    to ignore machines and multi-user phones from the following analysis.
+    Filter out user ids which have more weekly interactions on average than the
+    defined threshold in the attributes class. This query's purpose is to
+    ignore machines and multi-user phones from the following analysis.
 
     Inputs
     ------
     table_name : Name of the table the query is supposed to run on,
                  defaulting to '%(table_name)s', i.e. no substitution.
-    max_weekly_interactions : Maximum number of weekly interactions to
-        still count as a single user phone (not machine or multi-user).
+    max_weekly_interactions : Maximum number of average weekly interactions to
+                              still count as a single user phone (not machine
+                              or multi-user).
 
     Output
     ------
@@ -93,14 +123,20 @@ def filter_machines_query(max_weekly_interactions,
             (
                 SELECT
                   caller_id,
-                  DATE_FORMAT(DATE(datetime), 'w') as week_number,
-                  COUNT(1) as n_interactions
-                FROM %(table_name)s
-                -- count interactions per week
-                GROUP BY caller_id, week_number
+                  AVG(n_interactions) as avg_w_n_interactions -- calculate avg
+                FROM
+                (
+                    SELECT
+                      caller_id,
+                      DATE_FORMAT(DATE(datetime), 'w') as week_number,
+                      COUNT(1) as n_interactions
+                    FROM %(table_name)s
+                    -- count interactions per week
+                    GROUP BY caller_id, week_number
+                )
+                GROUP BY caller_id
             )
-            WHERE n_interactions > %(max_weekly_interactions)s
-            GROUP BY caller_id
+            WHERE avg_w_n_interactions > %(max_weekly_interactions)s
         ) filter -- identified machines or multiuser phones
         ON raw.caller_id = filter.caller_id
         WHERE is_machine IS NULL -- only keep non-machines (aka no match)
