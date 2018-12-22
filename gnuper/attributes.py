@@ -15,7 +15,7 @@ class Attributes:
                  bandicoot_path='user_bandicoot/',
                  antenna_features_path='antenna_features/',
                  raw_locations='locations.csv',  # adjust
-                 antennas_path='antennas',
+                 antennas_path='antennas/',
                  home_antennas_path='home_antennas/',
                  noct_begin=19, noct_end=7,  # adjust
                  work_begin=9, work_end=17,  # adjust
