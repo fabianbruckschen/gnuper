@@ -4,8 +4,12 @@ env/
 bin/
 build/
 
-# Small Mockup CDRs
-sample_data/
+# ignore data files
+*.csv
+*.crc
+
+# spark success files
+_SUCCESS
 
 # Compiled python modules
 *.pyc
