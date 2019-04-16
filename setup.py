@@ -22,7 +22,7 @@ setuptools.setup(
           'pandas==0.23.3',
           'py4j==0.10.7',
           'pyarrow',
-          'pyspark==2.3.1',
+          'pyspark>=2.3.2',
           'tqdm'
       ],
     classifiers=[
