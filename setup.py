@@ -19,7 +19,7 @@ setuptools.setup(
           'glob2==0.5',
           'numpy',
           'numpydoc',
-          'pandas==0.23.3',
+          'pandas',
           'py4j==0.10.7',
           'pyarrow',
           'pyspark>=2.3.2',
